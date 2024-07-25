@@ -1,0 +1,39 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+		<EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
+		<EnableAotAnalyzer>true</EnableAotAnalyzer>
+		<IsAotCompatible>true</IsAotCompatible>
+	</PropertyGroup>
+	
+	<PropertyGroup>
+		<PackageId>Hexa.NET.DebugDraw</PackageId>
+		<AssemblyVersion>1.0.0</AssemblyVersion>
+		<PackageVersion>1.0.0</PackageVersion>
+		<Authors>Juna</Authors>
+		<AssemblyName>Hexa.NET.DebugDraw</AssemblyName>
+		<PackageProjectUrl>https://github.com/HexaEngine/Hexa.NET.DebugDraw</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/HexaEngine/Hexa.NET.DebugDraw</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<Description>This library is a simple 3D debug drawing library for the HexaEngine in Immediate-mode</Description>
+		<PackageTags>HexaEngine Hexa C# .NET DotNet Sharp Native Drawing Debug 3D</PackageTags>
+		<PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Content Include="../LICENSE.txt" Pack="true" PackagePath="\" />
+		<Content Include="../README.md" Pack="true" PackagePath="\" />
+	</ItemGroup>
+	
+	<ItemGroup>
+		<PackageReference Include="Hexa.NET.Math" Version="1.0.0-*" />
+		<PackageReference Include="Hexa.NET.Utilities" Version="1.0.0" />
+	</ItemGroup>
+
+</Project>
