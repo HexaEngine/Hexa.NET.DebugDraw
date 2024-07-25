@@ -2,7 +2,7 @@
 
 namespace Hexa.NET.DebugDraw
 {
-    using HexaEngine.Core.Unsafes;
+    using Hexa.NET.Utilities;
 
     /// <summary>
     /// Represents a queue of debugging drawing commands for rendering primitives.

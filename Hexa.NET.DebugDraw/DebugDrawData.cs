@@ -1,10 +1,8 @@
 ﻿#nullable disable
 
-using Hexa.NET.DebugDraw;
-
 namespace Hexa.NET.DebugDraw
 {
-    using HexaEngine.Mathematics;
+    using Hexa.NET.Mathematics;
     using System.Numerics;
 
     /// <summary>

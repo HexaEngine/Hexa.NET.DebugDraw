@@ -2,7 +2,7 @@
 
 namespace Hexa.NET.DebugDraw
 {
-    using HexaEngine.Mathematics;
+    using Hexa.NET.Mathematics;
     using System;
     using System.Numerics;
     using System.Runtime.CompilerServices;
