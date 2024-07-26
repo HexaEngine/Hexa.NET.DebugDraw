@@ -34,7 +34,7 @@
             {
                 // Adjust the viewport to the new window size
                 gl.Viewport(s);
-                DebugDraw.SetViewport(new Viewport(0, 0, s.X, s.Y));
+                DebugDraw.SetViewport(Vector2.Zero, new(s.X, s.Y));
             };
 
             Vector3 position = new(-5, 5, -5);

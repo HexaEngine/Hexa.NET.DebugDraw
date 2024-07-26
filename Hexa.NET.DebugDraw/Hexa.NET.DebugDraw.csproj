@@ -18,7 +18,7 @@
 	<PropertyGroup>
 		<PackageId>Hexa.NET.DebugDraw</PackageId>
 		<AssemblyVersion>1.0.0</AssemblyVersion>
-		<PackageVersion>2.2.0</PackageVersion>
+		<PackageVersion>2.3.0</PackageVersion>
 		<Authors>Juna</Authors>
 		<AssemblyName>Hexa.NET.DebugDraw</AssemblyName>
 		<PackageProjectUrl>https://github.com/HexaEngine/Hexa.NET.DebugDraw</PackageProjectUrl>
@@ -36,7 +36,6 @@
 	</ItemGroup>
 	
 	<ItemGroup>
-		<PackageReference Include="Hexa.NET.Math" Version="2.0.0-*" />
 		<PackageReference Include="Hexa.NET.Utilities" Version="2.0.0" />
 	</ItemGroup>
 

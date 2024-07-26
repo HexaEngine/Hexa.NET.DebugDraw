@@ -1,6 +1,5 @@
 ﻿namespace Hexa.NET.DebugDraw
 {
-    using Hexa.NET.Mathematics;
     using System.Collections.Generic;
     using System.Numerics;
 
@@ -22,7 +21,7 @@
 
         public Matrix4x4 Camera => drawData.Camera;
 
-        public Viewport Viewport => drawData.Viewport;
+        public DebugDrawViewport Viewport => drawData.Viewport;
 
         public nint FontTextureId { get; set; }
 
@@ -33,9 +32,14 @@
             drawData.Camera = camera;
         }
 
-        public void SetViewport(Viewport viewport)
+        public void SetViewport(DebugDrawViewport viewport)
         {
             drawData.Viewport = viewport;
+        }
+
+        public void SetViewport(Vector2 offset, Vector2 size)
+        {
+            drawData.Viewport = new(offset, size);
         }
 
         public void NewFrame()

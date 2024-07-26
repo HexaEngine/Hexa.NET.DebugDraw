@@ -2,7 +2,6 @@
 
 namespace Hexa.NET.DebugDraw
 {
-    using Hexa.NET.Mathematics;
     using System.Numerics;
 
     /// <summary>
@@ -28,7 +27,7 @@ namespace Hexa.NET.DebugDraw
         /// <summary>
         /// Gets or sets the viewport information.
         /// </summary>
-        public Viewport Viewport;
+        public DebugDrawViewport Viewport;
 
         /// <summary>
         /// Gets or sets the camera matrix.

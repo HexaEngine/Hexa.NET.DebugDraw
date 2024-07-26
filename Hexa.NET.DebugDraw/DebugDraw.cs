@@ -1,6 +1,5 @@
 ﻿namespace Hexa.NET.DebugDraw
 {
-    using Hexa.NET.Mathematics;
     using System;
     using System.Numerics;
     using System.Runtime.CompilerServices;
@@ -17,6 +16,9 @@
         private const int COL32_B_SHIFT = 16;
         private const int COL32_A_SHIFT = 24;
         private const uint COL32_A_MASK = 0xFF000000;
+        private const float PI = MathF.PI;
+        private const float PI2 = MathF.PI * 2.0f;
+        private const float PIDIV2 = MathF.PI / 2.0f;
 
         public static DebugDrawContext CreateContext()
         {
@@ -216,14 +218,14 @@
         /// Sets the viewport for rendering debug shapes.
         /// </summary>
         /// <param name="viewport">The viewport to set.</param>
-        public static void SetViewport(Viewport viewport)
+        public static void SetViewport(Vector2 offset, Vector2 size)
         {
             if (currentContext == null)
             {
                 throw new InvalidOperationException("DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.");
             }
 
-            currentContext.SetViewport(viewport);
+            currentContext.SetViewport(new DebugDrawViewport(offset, size));
         }
 
         /// <summary>
@@ -272,16 +274,20 @@
         /// <summary>
         /// Draws a bounding frustum in the specified color.
         /// </summary>
-        /// <param name="frustum">The bounding frustum to be drawn.</param>
+        /// <param name="frustum">The bounding frustum to be drawn. Expects 9 corners</param>
         /// <param name="col">The color of the frustum.</param>
         ///
-        public static void DrawFrustum(BoundingFrustum frustum, Vector4 col)
+        public static void DrawFrustum(Vector3* frustumCorners, int cornerCount, Vector4 col)
         {
+            if (cornerCount != 9)
+            {
+                throw new ArgumentException("Frustum must have 9 corners", nameof(frustumCorners));
+            }
             CurrentList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
 
-            CurrentList.ReserveGeometry(BoundingFrustum.CornerCount, 24);
+            CurrentList.ReserveGeometry(9, 24);
             var indices = CurrentList.Indices + CurrentList.IndexCount;
             var vertices = CurrentList.Vertices + CurrentList.VertexCount;
 
@@ -298,11 +304,53 @@
             indices[20] = 6; indices[21] = 7;
             indices[22] = 7; indices[23] = 4;
 
-            var corners = frustum.Corners;
-            for (int i = 0; i < BoundingFrustum.CornerCount; i++)
+            for (int i = 0; i < 9; i++)
             {
                 vertices[i].Color = color;
-                vertices[i].Position = corners[i];
+                vertices[i].Position = frustumCorners[i];
+                vertices[i].UV = WhiteUV;
+            }
+
+            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+        }
+
+        /// <summary>
+        /// Draws a bounding frustum in the specified color.
+        /// </summary>
+        /// <param name="frustum">The bounding frustum to be drawn. Expects 9 corners</param>
+        /// <param name="col">The color of the frustum.</param>
+        ///
+        public static void DrawFrustum(Span<Vector3> frustumCorners, Vector4 col)
+        {
+            if (frustumCorners.Length < 9)
+            {
+                throw new ArgumentException("Frustum must have 9 corners", nameof(frustumCorners));
+            }
+            CurrentList.BeginDraw();
+
+            uint color = ColorConvertFloat4ToU32(col);
+
+            CurrentList.ReserveGeometry(9, 24);
+            var indices = CurrentList.Indices + CurrentList.IndexCount;
+            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
+
+            indices[0] = 0; indices[1] = 1;
+            indices[2] = 1; indices[3] = 2;
+            indices[4] = 2; indices[5] = 3;
+            indices[6] = 3; indices[7] = 0;
+            indices[8] = 0; indices[9] = 4;
+            indices[10] = 1; indices[11] = 5;
+            indices[12] = 2; indices[13] = 6;
+            indices[14] = 3; indices[15] = 7;
+            indices[16] = 4; indices[17] = 5;
+            indices[18] = 5; indices[19] = 6;
+            indices[20] = 6; indices[21] = 7;
+            indices[22] = 7; indices[23] = 4;
+
+            for (int i = 0; i < 9; i++)
+            {
+                vertices[i].Color = color;
+                vertices[i].Position = frustumCorners[i];
                 vertices[i].UV = WhiteUV;
             }
 
@@ -315,7 +363,7 @@
         /// <param name="box">The bounding box to be drawn.</param>
         /// <param name="col">The color of the box.</param>
         ///
-        public static void DrawBoundingBox(BoundingBox box, Vector4 col)
+        public static void DrawBoundingBox(Vector3 min, Vector3 max, Vector4 col)
         {
             CurrentList.BeginDraw();
 
@@ -339,14 +387,14 @@
             indices[20] = 6; indices[21] = 7;
             indices[22] = 7; indices[23] = 4;
 
-            vertices[0].Position = new Vector3(box.Min.X, box.Max.Y, box.Min.Z);
-            vertices[1].Position = new Vector3(box.Min.X, box.Min.Y, box.Min.Z);
-            vertices[2].Position = new Vector3(box.Max.X, box.Min.Y, box.Min.Z);
-            vertices[3].Position = new Vector3(box.Max.X, box.Max.Y, box.Min.Z);
-            vertices[4].Position = new Vector3(box.Min.X, box.Max.Y, box.Max.Z);
-            vertices[5].Position = new Vector3(box.Min.X, box.Min.Y, box.Max.Z);
-            vertices[6].Position = new Vector3(box.Max.X, box.Min.Y, box.Max.Z);
-            vertices[7].Position = new Vector3(box.Max.X, box.Max.Y, box.Max.Z);
+            vertices[0].Position = new Vector3(max.X, max.Y, min.Z);
+            vertices[1].Position = new Vector3(max.X, max.Y, min.Z);
+            vertices[2].Position = new Vector3(max.X, max.Y, max.Z);
+            vertices[3].Position = new Vector3(max.X, max.Y, max.Z);
+            vertices[4].Position = new Vector3(max.X, max.Y, max.Z);
+            vertices[5].Position = new Vector3(max.X, max.Y, max.Z);
+            vertices[6].Position = new Vector3(max.X, max.Y, max.Z);
+            vertices[7].Position = new Vector3(max.X, max.Y, max.Z);
 
             for (int i = 0; i < vertexCount; i++)
             {
@@ -561,9 +609,9 @@
         /// <param name="sphere">The bounding sphere to be drawn.</param>
         /// <param name="col">The color of the sphere.</param>
         ///
-        public static void DrawBoundingSphere(BoundingSphere sphere, Vector4 col)
+        public static void DrawBoundingSphere(Vector3 center, float radius, Vector4 col)
         {
-            DrawPreComputed(DebugDrawPrimitiveTopology.LineList, spherePositions, sphereIndices, Matrix4x4.CreateScale(sphere.Radius) * Matrix4x4.CreateTranslation(sphere.Center), col);
+            DrawPreComputed(DebugDrawPrimitiveTopology.LineList, spherePositions, sphereIndices, Matrix4x4.CreateScale(radius) * Matrix4x4.CreateTranslation(center), col);
         }
 
         /// <summary>
@@ -710,7 +758,7 @@
 
             indices[(c_ringSegments - 1) * 2 + 1] = 0;
 
-            float fAngleDelta = MathUtil.PI2 / c_ringSegments;
+            float fAngleDelta = PI2 / c_ringSegments;
 
             // Instead of calling cos/sin for each segment we calculate
             // the sign of the angle delta and then incrementally calculate sin
@@ -763,7 +811,7 @@
 
             indices[(c_ringSegments - 1) * 2 + 1] = 0;
 
-            float fAngleDelta = MathUtil.PI2 / c_ringSegments;
+            float fAngleDelta = PI2 / c_ringSegments;
 
             // Instead of calling cos/sin for each segment we calculate
             // the sign of the angle delta and then incrementally calculate sin
@@ -818,7 +866,7 @@
 
             Vector3 majorAxis = ellipse.majorAxis;
             Vector3 minorAxis = ellipse.minorAxis;
-            float fAngleDelta = MathUtil.PI2 / c_ringSegments;
+            float fAngleDelta = PI2 / c_ringSegments;
 
             // Instead of calling cos/sin for each segment we calculate
             // the sign of the angle delta and then incrementally calculate sin
@@ -876,7 +924,7 @@
 
             Vector3 majorAxis = ellipse.majorAxis;
             Vector3 minorAxis = ellipse.minorAxis;
-            float fAngleDelta = MathUtil.PI2 / c_ringSegments;
+            float fAngleDelta = PI2 / c_ringSegments;
 
             var mat = MathUtil.BillboardLH(origin, camPos, camUp, camForward);
 

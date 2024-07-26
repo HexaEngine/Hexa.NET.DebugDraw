@@ -15,8 +15,8 @@ using Silk.NET.OpenGLES;
 using Silk.NET.OpenGL.Legacy;
 #endif
 
-    using Hexa.NET.Mathematics;
     using Silk.NET.Windowing;
+    using System.Numerics;
 
     public class DebugDrawRenderer
     {
@@ -45,7 +45,7 @@ using Silk.NET.OpenGL.Legacy;
         {
             _gl = gl;
             context = DebugDraw.CreateContext();
-            context.SetViewport(new Viewport(0, 0, window.Size.X, window.Size.Y));
+            context.SetViewport(Vector2.Zero, new(window.Size.X, window.Size.Y));
             CreateDeviceObjects();
         }
 
@@ -120,7 +120,7 @@ using Silk.NET.OpenGL.Legacy;
 
         private unsafe void Render(DebugDrawData drawData)
         {
-            Viewport viewport = drawData.Viewport;
+            DebugDrawViewport viewport = drawData.Viewport;
             int framebufferWidth = (int)(viewport.Width);
             int framebufferHeight = (int)(viewport.Height);
             if (framebufferWidth <= 0 || framebufferHeight <= 0)
