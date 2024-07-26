@@ -26,6 +26,8 @@
 
         public nint FontTextureId { get; set; }
 
+        public DebugDrawStyle Style { get; } = new();
+
         public void SetCamera(Matrix4x4 camera)
         {
             drawData.Camera = camera;

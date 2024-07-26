@@ -37,10 +37,10 @@
                 DebugDraw.SetViewport(new Viewport(0, 0, s.X, s.Y));
             };
 
-            Vector3 position = new(0, 5, -1);
-            Quaternion rotation = new Vector3(0, 0, 0).ToRad().ToQuaternion();
+            Vector3 position = new(-5, 5, -5);
+            Quaternion rotation = new Vector3(45, 45, 0).ToRad().ToQuaternion();
             Matrix4x4 projection = MathUtil.PerspectiveFovLH(
-                MathF.PI / 2, window.Size.X / window.Size.Y, 0.1f, 1000f
+                100f.ToRad(), window.Size.X / window.Size.Y, 0.1f, 1000f
             );
             Vector3 target = Vector3.Transform(Vector3.UnitZ, rotation);
             Vector3 up = Vector3.Transform(Vector3.UnitY, rotation);
@@ -63,7 +63,9 @@
                 gl.ClearDepth(1.0f);
                 gl.Clear((uint)ClearBufferMask.DepthBufferBit);
 
-                DebugDraw.DrawGrid(Matrix4x4.Identity, 100, Vector4.One);
+                DebugDraw.PushStyleVar(DebugDrawStyleVar.GridAxisSize, 5);
+                DebugDraw.DrawGrid(Matrix4x4.Identity, GridFlags.DrawAxis);
+                DebugDraw.PopStyleVar();
 
                 DebugDraw.DrawBox(new(2, 4, 5), Quaternion.Identity, 1, 1, 1, new(1, 0, 0, 1));
 

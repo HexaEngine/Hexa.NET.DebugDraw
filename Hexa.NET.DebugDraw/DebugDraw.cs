@@ -91,6 +91,72 @@
             }
         }
 
+        public static void PushStyleColor(DebugDrawCol col, Vector4 color)
+        {
+            if (currentContext == null)
+            {
+                throw new InvalidOperationException("DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.");
+            }
+
+            currentContext.Style.PushStyleColor(col, color);
+        }
+
+        public static void PopStyleColor()
+        {
+            if (currentContext == null)
+            {
+                throw new InvalidOperationException("DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.");
+            }
+
+            currentContext.Style.PopStyleColor();
+        }
+
+        public static void PopStyleColor(int count)
+        {
+            if (currentContext == null)
+            {
+                throw new InvalidOperationException("DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.");
+            }
+
+            while (count-- != 0)
+            {
+                currentContext.Style.PopStyleColor();
+            }
+        }
+
+        public static void PushStyleVar(DebugDrawStyleVar var, float value)
+        {
+            if (currentContext == null)
+            {
+                throw new InvalidOperationException("DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.");
+            }
+
+            currentContext.Style.PushStyleVar(var, value);
+        }
+
+        public static void PopStyleVar()
+        {
+            if (currentContext == null)
+            {
+                throw new InvalidOperationException("DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.");
+            }
+
+            currentContext.Style.PopStyleVar();
+        }
+
+        public static void PopStyleVar(int count)
+        {
+            if (currentContext == null)
+            {
+                throw new InvalidOperationException("DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.");
+            }
+
+            while (count-- != 0)
+            {
+                currentContext.Style.PopStyleVar();
+            }
+        }
+
         /// <summary>
         /// Saturates a float value to the range [0, 1].
         /// </summary>
@@ -1437,7 +1503,6 @@ new Vector3(+1, +1, +1),
         /// <param name="matrix">The transformation matrix defining the orientation and position of the grid.</param>
         /// <param name="size">The size of the grid (half-extent in each dimension).</param>
         /// <param name="col">The color of the grid lines.</param>
-        ///
         public static void DrawGrid(Matrix4x4 matrix, int size, Vector4 col)
         {
             CurrentList.BeginDraw();
@@ -1472,6 +1537,106 @@ new Vector3(+1, +1, +1),
                 indices[i] = i;
                 indices[i + 1] = i + 1;
                 i += 2;
+            }
+
+            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+        }
+
+        /// <summary>
+        /// Draws a 3D grid in world space.
+        /// </summary>
+        /// <param name="matrix"> The transformation matrix defining the orientation and position of the grid.</param>
+        /// <param name="flags"> The flags that determine which elements of the grid to draw.</param>
+        /// <exception cref="InvalidOperationException"> The DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.</exception>
+        public static void DrawGrid(Matrix4x4 matrix, GridFlags flags)
+        {
+            if (currentContext == null)
+            {
+                throw new InvalidOperationException("DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.");
+            }
+
+            var style = currentContext.Style;
+            var size = (int)style.GridSize;
+            var spacing = style.GridSpacing;
+
+            CurrentList.BeginDraw();
+            bool axis = (flags & GridFlags.DrawAxis) != 0;
+
+            uint vertexCount = 2u * (uint)size * 2u + 4;
+
+            if (axis)
+            {
+                vertexCount += 6;
+            }
+
+            uint color = style.GetColorU32(DebugDrawCol.Grid);
+
+            CurrentList.ReserveGeometry(vertexCount, vertexCount);
+            var indices = CurrentList.Indices + CurrentList.IndexCount;
+            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
+
+            int half = size / 2;
+
+            uint i = 0;
+            for (int x = -half; x <= half; x++)
+            {
+                var pos0 = Vector3.Transform(new Vector3(x * spacing, 0, -half), matrix);
+                var pos1 = Vector3.Transform(new Vector3(x * spacing, 0, half), matrix);
+                vertices[i] = new(pos0, default, color);
+                vertices[i + 1] = new(pos1, default, color);
+                indices[i] = i;
+                indices[i + 1] = i + 1;
+                i += 2;
+            }
+
+            for (int z = -half; z <= half; z++)
+            {
+                var pos0 = Vector3.Transform(new Vector3(-half, 0, z * spacing), matrix);
+                var pos1 = Vector3.Transform(new Vector3(half, 0, z * spacing), matrix);
+                vertices[i] = new(pos0, default, color);
+                vertices[i + 1] = new(pos1, default, color);
+                indices[i] = i;
+                indices[i + 1] = i + 1;
+                i += 2;
+            }
+            if (axis)
+            {
+                var colX = style.GetColorU32(DebugDrawCol.GridAxisX);
+                var colY = style.GetColorU32(DebugDrawCol.GridAxisY);
+                var colZ = style.GetColorU32(DebugDrawCol.GridAxisZ);
+                var axisSize = style.GridAxisSize;
+
+                {
+                    var pos0 = Vector3.Transform(new Vector3(-axisSize, 0, 0), matrix);
+                    var pos1 = Vector3.Transform(new Vector3(axisSize, 0, 0), matrix);
+
+                    vertices[i] = new(pos0, default, colX);
+                    vertices[i + 1] = new(pos1, default, colX);
+                    indices[i] = i;
+                    indices[i + 1] = i + 1;
+                    i += 2;
+                }
+
+                {
+                    var pos0 = Vector3.Transform(new Vector3(0, -axisSize, 0), matrix);
+                    var pos1 = Vector3.Transform(new Vector3(0, axisSize, 0), matrix);
+
+                    vertices[i] = new(pos0, default, colY);
+                    vertices[i + 1] = new(pos1, default, colY);
+                    indices[i] = i;
+                    indices[i + 1] = i + 1;
+                    i += 2;
+                }
+
+                {
+                    var pos0 = Vector3.Transform(new Vector3(0, 0, -axisSize), matrix);
+                    var pos1 = Vector3.Transform(new Vector3(0, 0, axisSize), matrix);
+                    vertices[i] = new(pos0, default, colZ);
+                    vertices[i + 1] = new(pos1, default, colZ);
+                    indices[i] = i;
+                    indices[i + 1] = i + 1;
+                    i += 2;
+                }
             }
 
             CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
