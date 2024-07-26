@@ -45,9 +45,9 @@ The easiest way to add the DebugDraw library to your project is via the NuGet pa
    dotnet add package Hexa.NET.DebugDraw
    ```
 2. Initialization: Initialize the library in your application.
-   See examples [Example](https://github.com/HexaEngine/Hexa.NET.DebugDraw/Example).
+   See examples [Example](https://github.com/HexaEngine/Hexa.NET.DebugDraw/tree/master/Example).
 4. Drawing: Use the provided functions to draw shapes and text for debugging purposes.
-   See examples [Example](https://github.com/HexaEngine/Hexa.NET.DebugDraw/Example)
+   See examples [Example](https://github.com/HexaEngine/Hexa.NET.DebugDraw/tree/master/Example)
 
 ## Contributing
 
