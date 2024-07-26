@@ -13,7 +13,7 @@ namespace Hexa.NET.DebugDraw
         /// <summary>
         /// Gets the list of debug draw command lists.
         /// </summary>
-        public List<DebugDrawCommandList> CmdLists { get; } = new();
+        public List<DebugDrawCommandList> CmdLists { get; }
 
         /// <summary>
         /// Gets or sets the total number of vertices.
@@ -34,5 +34,15 @@ namespace Hexa.NET.DebugDraw
         /// Gets or sets the camera matrix.
         /// </summary>
         public Matrix4x4 Camera;
+
+        public DebugDrawData()
+        {
+            CmdLists = [];
+        }
+
+        public DebugDrawData(List<DebugDrawCommandList> cmdLists)
+        {
+            CmdLists = cmdLists;
+        }
     }
 }

@@ -1,6 +1,4 @@
-﻿#nullable disable
-
-namespace Hexa.NET.DebugDraw
+﻿namespace Hexa.NET.DebugDraw
 {
     using Hexa.NET.Mathematics;
     using System;
@@ -12,11 +10,7 @@ namespace Hexa.NET.DebugDraw
     /// </summary>
     public static unsafe class DebugDraw
     {
-        private static readonly DebugDrawCommandList immediateList = new(DebugDrawCommandListType.Immediate);
-        private static readonly DebugDrawData drawData = new();
-
-        private static Viewport viewport;
-        private static Matrix4x4 camera;
+        private static DebugDrawContext? currentContext;
 
         private const int COL32_R_SHIFT = 0;
         private const int COL32_G_SHIFT = 8;
@@ -24,9 +18,77 @@ namespace Hexa.NET.DebugDraw
         private const int COL32_A_SHIFT = 24;
         private const uint COL32_A_MASK = 0xFF000000;
 
-        static DebugDraw()
+        public static DebugDrawContext CreateContext()
         {
-            drawData.CmdLists.Add(immediateList);
+            DebugDrawContext context = new();
+
+            if (currentContext == null)
+            {
+                SetCurrentContext(context);
+            }
+
+            return context;
+        }
+
+        public static void SetCurrentContext(DebugDrawContext? context)
+        {
+            currentContext = context;
+        }
+
+        /// <summary>
+        /// Clears the draw commands and prepares for a new frame of drawing.
+        /// </summary>
+        public static void NewFrame()
+        {
+            if (currentContext == null)
+            {
+                throw new InvalidOperationException("DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.");
+            }
+
+            currentContext.NewFrame();
+        }
+
+        /// <summary>
+        /// Renders the accumulated draw commands to the viewport.
+        /// </summary>
+        public static void Render()
+        {
+            if (currentContext == null)
+            {
+                throw new InvalidOperationException("DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.");
+            }
+
+            var drawData = currentContext.GetDrawData();
+            for (int i = 0; i < drawData.CmdLists.Count; i++)
+            {
+                var list = drawData.CmdLists[i];
+                list.EndFrame();
+                drawData.TotalVertices += list.VertexCount;
+                drawData.TotalIndices += list.IndexCount;
+            }
+        }
+
+        public static DebugDrawData GetDrawData()
+        {
+            if (currentContext == null)
+            {
+                throw new InvalidOperationException("DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.");
+            }
+
+            return currentContext.GetDrawData();
+        }
+
+        public static DebugDrawCommandList CurrentList
+        {
+            get
+            {
+                if (currentContext == null)
+                {
+                    throw new InvalidOperationException("DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.");
+                }
+
+                return currentContext.CurrentList;
+            }
         }
 
         /// <summary>
@@ -70,47 +132,18 @@ namespace Hexa.NET.DebugDraw
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void DrawPreComputed(DebugDrawPrimitiveTopology topology, Vector3[] positions, uint[] indices, Matrix4x4 matrix, Vector4 color)
         {
-            immediateList.BeginDraw();
-            immediateList.AddIndexRange(indices);
-            immediateList.ReserveVerts((uint)positions.Length);
+            CurrentList.BeginDraw();
+            CurrentList.AddIndexRange(indices);
+            CurrentList.ReserveVerts((uint)positions.Length);
             var col = ColorConvertFloat4ToU32(color);
-            DebugDrawVert* verts = immediateList.Vertices + immediateList.VertexCount;
+            DebugDrawVert* verts = CurrentList.Vertices + CurrentList.VertexCount;
             for (uint i = 0; i < positions.Length; i++)
             {
                 verts[i].Position = Vector3.Transform(positions[i], matrix);
                 verts[i].Color = col;
                 verts[i].UV = WhiteUV;
             }
-            immediateList.RecordCmd(topology);
-        }
-
-        /// <summary>
-        /// Clears the draw commands and prepares for a new frame of drawing.
-        /// </summary>
-        public static void NewFrame()
-        {
-            drawData.CmdLists.Clear();
-            drawData.CmdLists.Add(immediateList);
-            immediateList.NewFrame();
-        }
-
-        /// <summary>
-        /// Renders the accumulated draw commands to the viewport.
-        /// </summary>
-        public static DebugDrawData Render()
-        {
-            for (int i = 0; i < drawData.CmdLists.Count; i++)
-            {
-                var list = drawData.CmdLists[i];
-                list.EndFrame();
-                drawData.TotalVertices += list.VertexCount;
-                drawData.TotalIndices += list.IndexCount;
-            }
-
-            drawData.Viewport = viewport;
-            drawData.Camera = camera;
-
-            return drawData;
+            CurrentList.RecordCmd(topology);
         }
 
         /// <summary>
@@ -119,16 +152,12 @@ namespace Hexa.NET.DebugDraw
         /// <param name="viewport">The viewport to set.</param>
         public static void SetViewport(Viewport viewport)
         {
-            DebugDraw.viewport = viewport;
-        }
+            if (currentContext == null)
+            {
+                throw new InvalidOperationException("DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.");
+            }
 
-        /// <summary>
-        /// Gets the current viewport used for rendering.
-        /// </summary>
-        /// <returns>The current viewport.</returns>
-        public static Viewport GetViewport()
-        {
-            return viewport;
+            currentContext.SetViewport(viewport);
         }
 
         /// <summary>
@@ -137,16 +166,12 @@ namespace Hexa.NET.DebugDraw
         /// <param name="camera">The camera matrix to set.</param>
         public static void SetCamera(Matrix4x4 camera)
         {
-            DebugDraw.camera = camera;
-        }
+            if (currentContext == null)
+            {
+                throw new InvalidOperationException("DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.");
+            }
 
-        /// <summary>
-        /// Gets the current camera matrix used for rendering.
-        /// </summary>
-        /// <returns>The current camera matrix.</returns>
-        public static Matrix4x4 GetCamera()
-        {
-            return camera;
+            currentContext.SetCamera(camera);
         }
 
         /// <summary>
@@ -155,7 +180,7 @@ namespace Hexa.NET.DebugDraw
         /// <returns>The debug draw command queue.</returns>
         public static DebugDrawCommandList GetImmediateCommandList()
         {
-            return immediateList;
+            return CurrentList;
         }
 
         /// <summary>
@@ -170,7 +195,12 @@ namespace Hexa.NET.DebugDraw
                 throw new InvalidOperationException($"CommandList must be type of Deferred, but was {commandList.Type}");
             }
 
-            drawData.CmdLists.Add(commandList);
+            if (currentContext == null)
+            {
+                throw new InvalidOperationException("DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.");
+            }
+
+            currentContext.ExecuteCommandList(commandList);
         }
 
         /// <summary>
@@ -181,13 +211,13 @@ namespace Hexa.NET.DebugDraw
         ///
         public static void DrawFrustum(BoundingFrustum frustum, Vector4 col)
         {
-            immediateList.BeginDraw();
+            CurrentList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
 
-            immediateList.ReserveGeometry(BoundingFrustum.CornerCount, 24);
-            var indices = immediateList.Indices + immediateList.IndexCount;
-            var vertices = immediateList.Vertices + immediateList.VertexCount;
+            CurrentList.ReserveGeometry(BoundingFrustum.CornerCount, 24);
+            var indices = CurrentList.Indices + CurrentList.IndexCount;
+            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
 
             indices[0] = 0; indices[1] = 1;
             indices[2] = 1; indices[3] = 2;
@@ -210,7 +240,7 @@ namespace Hexa.NET.DebugDraw
                 vertices[i].UV = WhiteUV;
             }
 
-            immediateList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
         }
 
         /// <summary>
@@ -221,14 +251,14 @@ namespace Hexa.NET.DebugDraw
         ///
         public static void DrawBoundingBox(BoundingBox box, Vector4 col)
         {
-            immediateList.BeginDraw();
+            CurrentList.BeginDraw();
 
             const uint vertexCount = 8;
             uint color = ColorConvertFloat4ToU32(col);
 
-            immediateList.ReserveGeometry(vertexCount, 24);
-            var indices = immediateList.Indices + immediateList.IndexCount;
-            var vertices = immediateList.Vertices + immediateList.VertexCount;
+            CurrentList.ReserveGeometry(vertexCount, 24);
+            var indices = CurrentList.Indices + CurrentList.IndexCount;
+            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
 
             indices[0] = 0; indices[1] = 1;
             indices[2] = 1; indices[3] = 2;
@@ -258,7 +288,7 @@ namespace Hexa.NET.DebugDraw
                 vertices[i].UV = WhiteUV;
             }
 
-            immediateList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
         }
 
         #region Sphere Data
@@ -480,13 +510,13 @@ namespace Hexa.NET.DebugDraw
         ///
         public static void DrawRay(Vector3 origin, Vector3 direction, bool normalize, Vector4 col)
         {
-            immediateList.BeginDraw();
+            CurrentList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
 
-            immediateList.ReserveGeometry(3, 4);
-            var indices = immediateList.Indices + immediateList.IndexCount;
-            var vertices = immediateList.Vertices + immediateList.VertexCount;
+            CurrentList.ReserveGeometry(3, 4);
+            var indices = CurrentList.Indices + CurrentList.IndexCount;
+            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
 
             indices[0] = 0; indices[1] = 1;
             indices[2] = 1; indices[3] = 2;
@@ -519,7 +549,7 @@ namespace Hexa.NET.DebugDraw
             vertices[1].UV = WhiteUV;
             vertices[2].UV = WhiteUV;
 
-            immediateList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
         }
 
         /// <summary>
@@ -532,14 +562,14 @@ namespace Hexa.NET.DebugDraw
         ///
         public static void DrawLine(Vector3 origin, Vector3 direction, bool normalize, Vector4 col)
         {
-            immediateList.BeginDraw();
+            CurrentList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
 
-            immediateList.ReserveGeometry(2, 2);
+            CurrentList.ReserveGeometry(2, 2);
 
-            var indices = immediateList.Indices + immediateList.IndexCount;
-            var vertices = immediateList.Vertices + immediateList.VertexCount;
+            var indices = CurrentList.Indices + CurrentList.IndexCount;
+            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
 
             indices[0] = 0;
             indices[1] = 1;
@@ -557,7 +587,7 @@ namespace Hexa.NET.DebugDraw
             vertices[0].UV = WhiteUV;
             vertices[1].UV = WhiteUV;
 
-            immediateList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
         }
 
         /// <summary>
@@ -569,13 +599,13 @@ namespace Hexa.NET.DebugDraw
         ///
         public static void DrawLine(Vector3 origin, Vector3 destination, Vector4 col)
         {
-            immediateList.BeginDraw();
+            CurrentList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
 
-            immediateList.ReserveGeometry(2, 2);
-            var indices = immediateList.Indices + immediateList.IndexCount;
-            var vertices = immediateList.Vertices + immediateList.VertexCount;
+            CurrentList.ReserveGeometry(2, 2);
+            var indices = CurrentList.Indices + CurrentList.IndexCount;
+            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
 
             indices[0] = 0;
             indices[1] = 1;
@@ -583,7 +613,7 @@ namespace Hexa.NET.DebugDraw
             vertices[0] = new(origin, default, color);
             vertices[1] = new(destination, default, color);
 
-            immediateList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
         }
 
         /// <summary>
@@ -597,14 +627,14 @@ namespace Hexa.NET.DebugDraw
         ///
         public static void DrawRing(Vector3 origin, Quaternion orientation, Vector3 majorAxis, Vector3 minorAxis, Vector4 col)
         {
-            immediateList.BeginDraw();
+            CurrentList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
             const int c_ringSegments = 32;
 
-            immediateList.ReserveGeometry(c_ringSegments, c_ringSegments * 2);
-            var indices = immediateList.Indices + immediateList.IndexCount;
-            var vertices = immediateList.Vertices + immediateList.VertexCount;
+            CurrentList.ReserveGeometry(c_ringSegments, c_ringSegments * 2);
+            var indices = CurrentList.Indices + CurrentList.IndexCount;
+            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
 
             for (uint i = 0; i < c_ringSegments; i++)
             {
@@ -637,7 +667,7 @@ namespace Hexa.NET.DebugDraw
                 incrementalSin = newSin;
             }
 
-            immediateList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
         }
 
         /// <summary>
@@ -650,14 +680,14 @@ namespace Hexa.NET.DebugDraw
         ///
         public static void DrawRing(Vector3 origin, Vector3 majorAxis, Vector3 minorAxis, Vector4 col)
         {
-            immediateList.BeginDraw();
+            CurrentList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
             const int c_ringSegments = 32;
 
-            immediateList.ReserveGeometry(c_ringSegments, c_ringSegments * 2);
-            var indices = immediateList.Indices + immediateList.IndexCount;
-            var vertices = immediateList.Vertices + immediateList.VertexCount;
+            CurrentList.ReserveGeometry(c_ringSegments, c_ringSegments * 2);
+            var indices = CurrentList.Indices + CurrentList.IndexCount;
+            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
 
             for (uint i = 0; i < c_ringSegments; i++)
             {
@@ -690,7 +720,7 @@ namespace Hexa.NET.DebugDraw
                 incrementalSin = newSin;
             }
 
-            immediateList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
         }
 
         /// <summary>
@@ -702,15 +732,15 @@ namespace Hexa.NET.DebugDraw
         ///
         public static void DrawRing(Vector3 origin, (Vector3 majorAxis, Vector3 minorAxis) ellipse, Vector4 col)
         {
-            immediateList.BeginDraw();
+            CurrentList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
             const int c_ringSegments = 32;
 
-            immediateList.ReserveGeometry(c_ringSegments, c_ringSegments * 2);
+            CurrentList.ReserveGeometry(c_ringSegments, c_ringSegments * 2);
 
-            var indices = immediateList.Indices + immediateList.IndexCount;
-            var vertices = immediateList.Vertices + immediateList.VertexCount;
+            var indices = CurrentList.Indices + CurrentList.IndexCount;
+            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
 
             for (uint i = 0; i < c_ringSegments; i++)
             {
@@ -745,7 +775,7 @@ namespace Hexa.NET.DebugDraw
                 incrementalSin = newSin;
             }
 
-            immediateList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
         }
 
         /// <summary>
@@ -760,15 +790,15 @@ namespace Hexa.NET.DebugDraw
         ///
         public static void DrawRingBillboard(Vector3 origin, Vector3 camPos, Vector3 camUp, Vector3 camForward, (Vector3 majorAxis, Vector3 minorAxis) ellipse, Vector4 col)
         {
-            immediateList.BeginDraw();
+            CurrentList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
             const int c_ringSegments = 32;
 
-            immediateList.ReserveGeometry(c_ringSegments, c_ringSegments * 2);
+            CurrentList.ReserveGeometry(c_ringSegments, c_ringSegments * 2);
 
-            var indices = immediateList.Indices + immediateList.IndexCount;
-            var vertices = immediateList.Vertices + immediateList.VertexCount;
+            var indices = CurrentList.Indices + CurrentList.IndexCount;
+            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
 
             for (uint i = 0; i < c_ringSegments; i++)
             {
@@ -805,7 +835,7 @@ namespace Hexa.NET.DebugDraw
                 incrementalSin = newSin;
             }
 
-            immediateList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
         }
 
         private static readonly Vector3[] boxPositions =
@@ -1304,13 +1334,13 @@ new Vector3(+1, +1, +1),
         ///
         public static void DrawTriangle(Vector3 origin, Quaternion orientation, Vector3 a, Vector3 b, Vector3 c, Vector4 col)
         {
-            immediateList.BeginDraw();
+            CurrentList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
 
-            immediateList.ReserveGeometry(3, 6);
-            var indices = immediateList.Indices + immediateList.IndexCount;
-            var vertices = immediateList.Vertices + immediateList.VertexCount;
+            CurrentList.ReserveGeometry(3, 6);
+            var indices = CurrentList.Indices + CurrentList.IndexCount;
+            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
 
             indices[0] = 0; indices[1] = 1;
             indices[2] = 1; indices[3] = 2;
@@ -1320,7 +1350,7 @@ new Vector3(+1, +1, +1),
             vertices[1] = new(Vector3.Transform(b, orientation) + origin, default, color);
             vertices[2] = new(Vector3.Transform(c, orientation) + origin, default, color);
 
-            immediateList.RecordCmd(DebugDrawPrimitiveTopology.TriangleList);
+            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.TriangleList);
         }
 
         /// <summary>
@@ -1336,13 +1366,13 @@ new Vector3(+1, +1, +1),
         ///
         public static void DrawQuad(Vector3 origin, Quaternion orientation, Vector2 scale, Vector2 uv0, Vector2 uv1, Vector4 col, nint texId)
         {
-            immediateList.BeginDraw();
+            CurrentList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
 
-            immediateList.ReserveGeometry(4, 6);
-            var indices = immediateList.Indices + immediateList.IndexCount;
-            var vertices = immediateList.Vertices + immediateList.VertexCount;
+            CurrentList.ReserveGeometry(4, 6);
+            var indices = CurrentList.Indices + CurrentList.IndexCount;
+            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
 
             indices[0] = 0; indices[1] = 1; indices[2] = 2;
             indices[3] = 1; indices[4] = 2; indices[5] = 3;
@@ -1357,7 +1387,7 @@ new Vector3(+1, +1, +1),
             vertices[2] = new(Vector3.Transform(p2, orientation) + origin, new(uv1.X, uv0.Y), color);
             vertices[3] = new(Vector3.Transform(p3, orientation) + origin, uv1, color);
 
-            immediateList.RecordCmd(DebugDrawPrimitiveTopology.TriangleList, texId);
+            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.TriangleList, texId);
         }
 
         /// <summary>
@@ -1375,13 +1405,13 @@ new Vector3(+1, +1, +1),
         ///
         public static void DrawQuadBillboard(Vector3 origin, Vector3 camOrigin, Vector3 camUp, Vector3 camForward, Vector2 scale, Vector2 uv0, Vector2 uv1, Vector4 col, nint texId)
         {
-            immediateList.BeginDraw();
+            CurrentList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
 
-            immediateList.ReserveGeometry(4, 6);
-            var indices = immediateList.Indices + immediateList.IndexCount;
-            var vertices = immediateList.Vertices + immediateList.VertexCount;
+            CurrentList.ReserveGeometry(4, 6);
+            var indices = CurrentList.Indices + CurrentList.IndexCount;
+            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
 
             indices[0] = 0; indices[1] = 1; indices[2] = 2;
             indices[3] = 0; indices[4] = 2; indices[5] = 3;
@@ -1398,7 +1428,7 @@ new Vector3(+1, +1, +1),
             vertices[2] = new(Vector3.Transform(p2, mat), new(uv1.X, uv0.Y), color);
             vertices[3] = new(Vector3.Transform(p3, mat), uv1, color);
 
-            immediateList.RecordCmd(DebugDrawPrimitiveTopology.TriangleList, texId);
+            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.TriangleList, texId);
         }
 
         /// <summary>
@@ -1410,14 +1440,14 @@ new Vector3(+1, +1, +1),
         ///
         public static void DrawGrid(Matrix4x4 matrix, int size, Vector4 col)
         {
-            immediateList.BeginDraw();
+            CurrentList.BeginDraw();
 
             uint vertexCount = 2u * (uint)size * 2u + 4;
             uint color = ColorConvertFloat4ToU32(col);
 
-            immediateList.ReserveGeometry(vertexCount, vertexCount);
-            var indices = immediateList.Indices + immediateList.IndexCount;
-            var vertices = immediateList.Vertices + immediateList.VertexCount;
+            CurrentList.ReserveGeometry(vertexCount, vertexCount);
+            var indices = CurrentList.Indices + CurrentList.IndexCount;
+            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
 
             int half = size / 2;
 
@@ -1444,7 +1474,7 @@ new Vector3(+1, +1, +1),
                 i += 2;
             }
 
-            immediateList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
         }
     }
 }
