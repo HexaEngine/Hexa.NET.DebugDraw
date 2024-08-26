@@ -18,16 +18,18 @@
 	<PropertyGroup>
 		<PackageId>Hexa.NET.DebugDraw</PackageId>
 		<AssemblyVersion>1.0.0</AssemblyVersion>
-		<PackageVersion>2.3.0</PackageVersion>
-		<Authors>Juna</Authors>
-		<AssemblyName>Hexa.NET.DebugDraw</AssemblyName>
+		<PackageVersion>2.3.1</PackageVersion>
+		<Description>This library is a simple 3D debug drawing library for the HexaEngine in Immediate-mode</Description>
+		<PackageTags>HexaEngine Hexa C# .NET DotNet Sharp Native Drawing Debug 3D</PackageTags>
+		<Authors>Juna Meinhold</Authors>
+		<Copyright>Copyright (c) 2024 Juna Meinhold</Copyright>
 		<PackageProjectUrl>https://github.com/HexaEngine/Hexa.NET.DebugDraw</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/HexaEngine/Hexa.NET.DebugDraw</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
-		<Description>This library is a simple 3D debug drawing library for the HexaEngine in Immediate-mode</Description>
-		<PackageTags>HexaEngine Hexa C# .NET DotNet Sharp Native Drawing Debug 3D</PackageTags>
 		<PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
+		
+		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -36,7 +38,7 @@
 	</ItemGroup>
 	
 	<ItemGroup>
-		<PackageReference Include="Hexa.NET.Utilities" Version="2.0.0" />
+		<PackageReference Include="Hexa.NET.Utilities" Version="2.1.5" />
 	</ItemGroup>
 
 </Project>

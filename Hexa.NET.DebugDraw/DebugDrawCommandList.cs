@@ -76,8 +76,8 @@ namespace Hexa.NET.DebugDraw
         /// <param name="nIndices">The number of indices to reserve.</param>
         public void ReserveGeometry(uint nVertices, uint nIndices)
         {
-            vertices.Resize(vertices.Size + nVertices);
-            indices.Resize(indices.Size + nIndices);
+            vertices.Resize(vertices.Size + (int)nVertices);
+            indices.Resize(indices.Size + (int)nIndices);
             nVerticesCmd += nVertices;
             nIndicesCmd += nIndices;
         }
@@ -88,7 +88,7 @@ namespace Hexa.NET.DebugDraw
         /// <param name="nVertices">The number of vertices to reserve.</param>
         public void ReserveVerts(uint nVertices)
         {
-            vertices.Resize(vertices.Size + nVertices);
+            vertices.Resize(vertices.Size + (int)nVertices);
             nVerticesCmd += nVertices;
         }
 
@@ -98,7 +98,7 @@ namespace Hexa.NET.DebugDraw
         /// <param name="nIndices">The number of indices to reserve.</param>
         public void ReserveIndices(uint nIndices)
         {
-            indices.Resize(indices.Size + nIndices);
+            indices.Resize(indices.Size + (int)nIndices);
             nIndicesCmd += nIndices;
         }
 
@@ -231,9 +231,9 @@ namespace Hexa.NET.DebugDraw
                     i--;
 
                     var vOffset = last.VertexCount;
-                    for (uint j = 0; j < cmd.IndexCount; j++)
+                    for (int j = 0; j < cmd.IndexCount; j++)
                     {
-                        indices[cmd.IndexOffset + j] += vOffset;
+                        indices[(int)cmd.IndexOffset + j] += vOffset;
                     }
 
                     last.VertexCount += cmd.VertexCount;
