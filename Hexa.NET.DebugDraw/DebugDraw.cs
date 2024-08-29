@@ -60,14 +60,19 @@
                 throw new InvalidOperationException("DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.");
             }
 
+            uint totalCmds = 0;
             var drawData = currentContext.GetDrawData();
+            drawData.Clear();
             for (int i = 0; i < drawData.CmdLists.Count; i++)
             {
                 var list = drawData.CmdLists[i];
-                list.EndFrame();
+                list.Finish();
                 drawData.TotalVertices += list.VertexCount;
                 drawData.TotalIndices += list.IndexCount;
+                totalCmds += (uint)list.Commands.Size;
             }
+
+            currentContext.EndFrame(new(drawData.TotalVertices, drawData.TotalIndices, totalCmds));
         }
 
         public static DebugDrawData GetDrawData()
@@ -78,6 +83,16 @@
             }
 
             return currentContext.GetDrawData();
+        }
+
+        public static DebugDrawStatistics GetStatistics()
+        {
+            if (currentContext == null)
+            {
+                throw new InvalidOperationException("DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.");
+            }
+
+            return currentContext.GetStatistics();
         }
 
         public static DebugDrawCommandList CurrentList
@@ -198,20 +213,20 @@
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void DrawPreComputed(DebugDrawPrimitiveTopology topology, Vector3[] positions, uint[] indices, Matrix4x4 matrix, Vector4 color)
+        private static void DrawPreComputed(DebugDrawCommandList commandList, DebugDrawPrimitiveTopology topology, Vector3[] positions, uint[] indices, Matrix4x4 matrix, Vector4 color)
         {
-            CurrentList.BeginDraw();
-            CurrentList.AddIndexRange(indices);
-            CurrentList.ReserveVerts((uint)positions.Length);
+            commandList.BeginDraw();
+            commandList.AddIndexRange(indices);
+            commandList.ReserveVerts((uint)positions.Length);
             var col = ColorConvertFloat4ToU32(color);
-            DebugDrawVert* verts = CurrentList.Vertices + CurrentList.VertexCount;
+            DebugDrawVert* verts = commandList.Vertices + commandList.VertexCount;
             for (uint i = 0; i < positions.Length; i++)
             {
-                verts[i].Position = Vector3.Transform(positions[i], matrix);
+                verts[i].Position = positions[i];
                 verts[i].Color = col;
                 verts[i].UV = WhiteUV;
             }
-            CurrentList.RecordCmd(topology);
+            commandList.RecordCmd(topology, matrix);
         }
 
         /// <summary>
@@ -271,25 +286,19 @@
             currentContext.ExecuteCommandList(commandList);
         }
 
-        /// <summary>
-        /// Draws a bounding frustum in the specified color.
-        /// </summary>
-        /// <param name="frustum">The bounding frustum to be drawn. Expects 9 corners</param>
-        /// <param name="col">The color of the frustum.</param>
-        ///
-        public static void DrawFrustum(Vector3* frustumCorners, int cornerCount, Vector4 col)
+        public static void DrawFrustum(DebugDrawCommandList commandList, Vector3* frustumCorners, int cornerCount, Vector4 col)
         {
             if (cornerCount != 9)
             {
                 throw new ArgumentException("Frustum must have 9 corners", nameof(frustumCorners));
             }
-            CurrentList.BeginDraw();
+            commandList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
 
-            CurrentList.ReserveGeometry(9, 24);
-            var indices = CurrentList.Indices + CurrentList.IndexCount;
-            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
+            commandList.ReserveGeometry(9, 24);
+            var indices = commandList.Indices + commandList.IndexCount;
+            var vertices = commandList.Vertices + commandList.VertexCount;
 
             indices[0] = 0; indices[1] = 1;
             indices[2] = 1; indices[3] = 2;
@@ -311,28 +320,27 @@
                 vertices[i].UV = WhiteUV;
             }
 
-            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            commandList.RecordCmd(DebugDrawPrimitiveTopology.LineList, Matrix4x4.Identity);
         }
 
-        /// <summary>
-        /// Draws a bounding frustum in the specified color.
-        /// </summary>
-        /// <param name="frustum">The bounding frustum to be drawn. Expects 9 corners</param>
-        /// <param name="col">The color of the frustum.</param>
-        ///
-        public static void DrawFrustum(Span<Vector3> frustumCorners, Vector4 col)
+        public static void DrawFrustum(Vector3* frustumCorners, int cornerCount, Vector4 col)
+        {
+            DrawFrustum(CurrentList, frustumCorners, cornerCount, col);
+        }
+
+        public static void DrawFrustum(DebugDrawCommandList commandList, Span<Vector3> frustumCorners, Vector4 col)
         {
             if (frustumCorners.Length < 9)
             {
                 throw new ArgumentException("Frustum must have 9 corners", nameof(frustumCorners));
             }
-            CurrentList.BeginDraw();
+            commandList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
 
-            CurrentList.ReserveGeometry(9, 24);
-            var indices = CurrentList.Indices + CurrentList.IndexCount;
-            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
+            commandList.ReserveGeometry(9, 24);
+            var indices = commandList.Indices + commandList.IndexCount;
+            var vertices = commandList.Vertices + commandList.VertexCount;
 
             indices[0] = 0; indices[1] = 1;
             indices[2] = 1; indices[3] = 2;
@@ -354,7 +362,12 @@
                 vertices[i].UV = WhiteUV;
             }
 
-            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            commandList.RecordCmd(DebugDrawPrimitiveTopology.LineList, Matrix4x4.Identity);
+        }
+
+        public static void DrawFrustum(Span<Vector3> frustumCorners, Vector4 col)
+        {
+            DrawFrustum(CurrentList, frustumCorners, col);
         }
 
         /// <summary>
@@ -363,16 +376,16 @@
         /// <param name="box">The bounding box to be drawn.</param>
         /// <param name="col">The color of the box.</param>
         ///
-        public static void DrawBoundingBox(Vector3 min, Vector3 max, Vector4 col)
+        public static void DrawBoundingBox(DebugDrawCommandList commandList, Vector3 min, Vector3 max, Vector4 col)
         {
-            CurrentList.BeginDraw();
+            commandList.BeginDraw();
 
             const uint vertexCount = 8;
             uint color = ColorConvertFloat4ToU32(col);
 
-            CurrentList.ReserveGeometry(vertexCount, 24);
-            var indices = CurrentList.Indices + CurrentList.IndexCount;
-            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
+            commandList.ReserveGeometry(vertexCount, 24);
+            var indices = commandList.Indices + commandList.IndexCount;
+            var vertices = commandList.Vertices + commandList.VertexCount;
 
             indices[0] = 0; indices[1] = 1;
             indices[2] = 1; indices[3] = 2;
@@ -402,7 +415,12 @@
                 vertices[i].UV = WhiteUV;
             }
 
-            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            commandList.RecordCmd(DebugDrawPrimitiveTopology.LineList, Matrix4x4.Identity);
+        }
+
+        public static void DrawBoundingBox(Vector3 min, Vector3 max, Vector4 col)
+        {
+            DrawBoundingBox(CurrentList, min, max, col);
         }
 
         #region Sphere Data
@@ -603,15 +621,14 @@
 
         #endregion Sphere Data
 
-        /// <summary>
-        /// Draws a bounding sphere in the specified color.
-        /// </summary>
-        /// <param name="sphere">The bounding sphere to be drawn.</param>
-        /// <param name="col">The color of the sphere.</param>
-        ///
+        public static void DrawBoundingSphere(DebugDrawCommandList commandList, Vector3 center, float radius, Vector4 col)
+        {
+            DrawPreComputed(commandList, DebugDrawPrimitiveTopology.LineList, spherePositions, sphereIndices, Matrix4x4.CreateScale(radius) * Matrix4x4.CreateTranslation(center), col);
+        }
+
         public static void DrawBoundingSphere(Vector3 center, float radius, Vector4 col)
         {
-            DrawPreComputed(DebugDrawPrimitiveTopology.LineList, spherePositions, sphereIndices, Matrix4x4.CreateScale(radius) * Matrix4x4.CreateTranslation(center), col);
+            DrawBoundingSphere(CurrentList, center, radius, col);
         }
 
         /// <summary>
@@ -622,15 +639,15 @@
         /// <param name="normalize">True if the direction vector should be normalized; otherwise, false.</param>
         /// <param name="col">The color of the ray.</param>
         ///
-        public static void DrawRay(Vector3 origin, Vector3 direction, bool normalize, Vector4 col)
+        public static void DrawRay(DebugDrawCommandList commandList, Vector3 origin, Vector3 direction, bool normalize, Vector4 col)
         {
-            CurrentList.BeginDraw();
+            commandList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
 
-            CurrentList.ReserveGeometry(3, 4);
-            var indices = CurrentList.Indices + CurrentList.IndexCount;
-            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
+            commandList.ReserveGeometry(3, 4);
+            var indices = commandList.Indices + commandList.IndexCount;
+            var vertices = commandList.Vertices + commandList.VertexCount;
 
             indices[0] = 0; indices[1] = 1;
             indices[2] = 1; indices[3] = 2;
@@ -663,7 +680,12 @@
             vertices[1].UV = WhiteUV;
             vertices[2].UV = WhiteUV;
 
-            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            commandList.RecordCmd(DebugDrawPrimitiveTopology.LineList, Matrix4x4.Identity);
+        }
+
+        public static void DrawRay(Vector3 origin, Vector3 direction, bool normalize, Vector4 col)
+        {
+            DrawRay(CurrentList, origin, direction, normalize, col);
         }
 
         /// <summary>
@@ -674,16 +696,16 @@
         /// <param name="normalize">True if the direction vector should be normalized; otherwise, false.</param>
         /// <param name="col">The color of the line.</param>
         ///
-        public static void DrawLine(Vector3 origin, Vector3 direction, bool normalize, Vector4 col)
+        public static void DrawLine(DebugDrawCommandList commandList, Vector3 origin, Vector3 direction, bool normalize, Vector4 col)
         {
-            CurrentList.BeginDraw();
+            commandList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
 
-            CurrentList.ReserveGeometry(2, 2);
+            commandList.ReserveGeometry(2, 2);
 
-            var indices = CurrentList.Indices + CurrentList.IndexCount;
-            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
+            var indices = commandList.Indices + commandList.IndexCount;
+            var vertices = commandList.Vertices + commandList.VertexCount;
 
             indices[0] = 0;
             indices[1] = 1;
@@ -701,7 +723,12 @@
             vertices[0].UV = WhiteUV;
             vertices[1].UV = WhiteUV;
 
-            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            commandList.RecordCmd(DebugDrawPrimitiveTopology.LineList, Matrix4x4.Identity);
+        }
+
+        public static void DrawLine(Vector3 origin, Vector3 direction, bool normalize, Vector4 col)
+        {
+            DrawLine(CurrentList, origin, direction, normalize, col);
         }
 
         /// <summary>
@@ -711,15 +738,15 @@
         /// <param name="destination">The ending point of the line.</param>
         /// <param name="col">The color of the line.</param>
         ///
-        public static void DrawLine(Vector3 origin, Vector3 destination, Vector4 col)
+        public static void DrawLine(DebugDrawCommandList commandList, Vector3 origin, Vector3 destination, Vector4 col)
         {
-            CurrentList.BeginDraw();
+            commandList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
 
-            CurrentList.ReserveGeometry(2, 2);
-            var indices = CurrentList.Indices + CurrentList.IndexCount;
-            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
+            commandList.ReserveGeometry(2, 2);
+            var indices = commandList.Indices + commandList.IndexCount;
+            var vertices = commandList.Vertices + commandList.VertexCount;
 
             indices[0] = 0;
             indices[1] = 1;
@@ -727,7 +754,12 @@
             vertices[0] = new(origin, default, color);
             vertices[1] = new(destination, default, color);
 
-            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            commandList.RecordCmd(DebugDrawPrimitiveTopology.LineList, Matrix4x4.Identity);
+        }
+
+        public static void DrawLine(Vector3 origin, Vector3 destination, Vector4 col)
+        {
+            DrawLine(CurrentList, origin, destination, col);
         }
 
         /// <summary>
@@ -739,16 +771,16 @@
         /// <param name="minorAxis">The minor axis of the ring.</param>
         /// <param name="col">The color of the ring.</param>
         ///
-        public static void DrawRing(Vector3 origin, Quaternion orientation, Vector3 majorAxis, Vector3 minorAxis, Vector4 col)
+        public static void DrawRing(DebugDrawCommandList commandList, Vector3 origin, Quaternion orientation, Vector3 majorAxis, Vector3 minorAxis, Vector4 col)
         {
-            CurrentList.BeginDraw();
+            commandList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
             const int c_ringSegments = 32;
 
-            CurrentList.ReserveGeometry(c_ringSegments, c_ringSegments * 2);
-            var indices = CurrentList.Indices + CurrentList.IndexCount;
-            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
+            commandList.ReserveGeometry(c_ringSegments, c_ringSegments * 2);
+            var indices = commandList.Indices + commandList.IndexCount;
+            var vertices = commandList.Vertices + commandList.VertexCount;
 
             for (uint i = 0; i < c_ringSegments; i++)
             {
@@ -771,7 +803,7 @@
             {
                 Vector3 pos = majorAxis * incrementalCos;
                 pos = minorAxis * incrementalSin + pos;
-                vertices[i].Position = Vector3.Transform(pos, orientation) + origin;
+                vertices[i].Position = pos;
                 vertices[i].UV = WhiteUV;
                 vertices[i].Color = color;
                 // Standard formula to rotate a vector.
@@ -781,7 +813,12 @@
                 incrementalSin = newSin;
             }
 
-            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            commandList.RecordCmd(DebugDrawPrimitiveTopology.LineList, Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(origin));
+        }
+
+        public static void DrawRing(Vector3 origin, Quaternion orientation, Vector3 majorAxis, Vector3 minorAxis, Vector4 col)
+        {
+            DrawRing(CurrentList, origin, orientation, majorAxis, minorAxis, col);
         }
 
         /// <summary>
@@ -792,16 +829,16 @@
         /// <param name="minorAxis">The minor axis of the ring.</param>
         /// <param name="col">The color of the ring.</param>
         ///
-        public static void DrawRing(Vector3 origin, Vector3 majorAxis, Vector3 minorAxis, Vector4 col)
+        public static void DrawRing(DebugDrawCommandList commandList, Vector3 origin, Vector3 majorAxis, Vector3 minorAxis, Vector4 col)
         {
-            CurrentList.BeginDraw();
+            commandList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
             const int c_ringSegments = 32;
 
-            CurrentList.ReserveGeometry(c_ringSegments, c_ringSegments * 2);
-            var indices = CurrentList.Indices + CurrentList.IndexCount;
-            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
+            commandList.ReserveGeometry(c_ringSegments, c_ringSegments * 2);
+            var indices = commandList.Indices + commandList.IndexCount;
+            var vertices = commandList.Vertices + commandList.VertexCount;
 
             for (uint i = 0; i < c_ringSegments; i++)
             {
@@ -822,7 +859,7 @@
             Vector3 incrementalCos = new(1.0f, 1.0f, 1.0f);
             for (int i = 0; i < c_ringSegments; i++)
             {
-                Vector3 pos = majorAxis * incrementalCos + origin;
+                Vector3 pos = majorAxis * incrementalCos;
                 pos = minorAxis * incrementalSin + pos;
                 vertices[i].Position = pos;
                 vertices[i].UV = WhiteUV;
@@ -834,7 +871,12 @@
                 incrementalSin = newSin;
             }
 
-            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            commandList.RecordCmd(DebugDrawPrimitiveTopology.LineList, Matrix4x4.CreateTranslation(origin));
+        }
+
+        public static void DrawRing(Vector3 origin, Vector3 majorAxis, Vector3 minorAxis, Vector4 col)
+        {
+            DrawRing(CurrentList, origin, majorAxis, minorAxis, col);
         }
 
         /// <summary>
@@ -844,17 +886,17 @@
         /// <param name="ellipse">The major axis and minor axis of the ring.</param>
         /// <param name="col">The color of the ring.</param>
         ///
-        public static void DrawRing(Vector3 origin, (Vector3 majorAxis, Vector3 minorAxis) ellipse, Vector4 col)
+        public static void DrawRing(DebugDrawCommandList commandList, Vector3 origin, (Vector3 majorAxis, Vector3 minorAxis) ellipse, Vector4 col)
         {
-            CurrentList.BeginDraw();
+            commandList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
             const int c_ringSegments = 32;
 
-            CurrentList.ReserveGeometry(c_ringSegments, c_ringSegments * 2);
+            commandList.ReserveGeometry(c_ringSegments, c_ringSegments * 2);
 
-            var indices = CurrentList.Indices + CurrentList.IndexCount;
-            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
+            var indices = commandList.Indices + commandList.IndexCount;
+            var vertices = commandList.Vertices + commandList.VertexCount;
 
             for (uint i = 0; i < c_ringSegments; i++)
             {
@@ -877,7 +919,7 @@
             Vector3 incrementalCos = new(1.0f, 1.0f, 1.0f);
             for (int i = 0; i < c_ringSegments; i++)
             {
-                Vector3 pos = majorAxis * incrementalCos + origin;
+                Vector3 pos = majorAxis * incrementalCos;
                 pos = minorAxis * incrementalSin + pos;
                 vertices[i].Position = pos;
                 vertices[i].UV = WhiteUV;
@@ -889,7 +931,12 @@
                 incrementalSin = newSin;
             }
 
-            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            commandList.RecordCmd(DebugDrawPrimitiveTopology.LineList, Matrix4x4.CreateTranslation(origin));
+        }
+
+        public static void DrawRing(Vector3 origin, (Vector3 majorAxis, Vector3 minorAxis) ellipse, Vector4 col)
+        {
+            DrawRing(CurrentList, origin, ellipse, col);
         }
 
         /// <summary>
@@ -902,17 +949,17 @@
         /// <param name="ellipse">Tuple containing major and minor axes of the ellipse defining the ring.</param>
         /// <param name="col">Color of the ring.</param>
         ///
-        public static void DrawRingBillboard(Vector3 origin, Vector3 camPos, Vector3 camUp, Vector3 camForward, (Vector3 majorAxis, Vector3 minorAxis) ellipse, Vector4 col)
+        public static void DrawRingBillboard(DebugDrawCommandList commandList, Vector3 origin, Vector3 camPos, Vector3 camUp, Vector3 camForward, (Vector3 majorAxis, Vector3 minorAxis) ellipse, Vector4 col)
         {
-            CurrentList.BeginDraw();
+            commandList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
             const int c_ringSegments = 32;
 
-            CurrentList.ReserveGeometry(c_ringSegments, c_ringSegments * 2);
+            commandList.ReserveGeometry(c_ringSegments, c_ringSegments * 2);
 
-            var indices = CurrentList.Indices + CurrentList.IndexCount;
-            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
+            var indices = commandList.Indices + commandList.IndexCount;
+            var vertices = commandList.Vertices + commandList.VertexCount;
 
             for (uint i = 0; i < c_ringSegments; i++)
             {
@@ -939,7 +986,7 @@
             {
                 Vector3 pos = majorAxis * incrementalCos;
                 pos = minorAxis * incrementalSin + pos;
-                vertices[i].Position = Vector3.Transform(pos, mat);
+                vertices[i].Position = pos;
                 vertices[i].UV = WhiteUV;
                 vertices[i].Color = color;
                 // Standard formula to rotate a vector.
@@ -949,7 +996,12 @@
                 incrementalSin = newSin;
             }
 
-            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            commandList.RecordCmd(DebugDrawPrimitiveTopology.LineList, mat);
+        }
+
+        public static void DrawRingBillboard(Vector3 origin, Vector3 camPos, Vector3 camUp, Vector3 camForward, (Vector3 majorAxis, Vector3 minorAxis) ellipse, Vector4 col)
+        {
+            DrawRingBillboard(CurrentList, origin, camPos, camUp, camForward, ellipse, col);
         }
 
         private static readonly Vector3[] boxPositions =
@@ -975,10 +1027,14 @@ new Vector3(+1, +1, +1),
         /// <param name="height">The height of the box.</param>
         /// <param name="depth">The depth of the box.</param>
         /// <param name="col">The color of the box.</param>
-        ///
+        public static void DrawBox(DebugDrawCommandList commandList, Vector3 origin, Quaternion orientation, float width, float height, float depth, Vector4 col)
+        {
+            DrawPreComputed(commandList, DebugDrawPrimitiveTopology.LineList, boxPositions, boxIndices, Matrix4x4.CreateScale(width, height, depth) * Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(origin), col);
+        }
+
         public static void DrawBox(Vector3 origin, Quaternion orientation, float width, float height, float depth, Vector4 col)
         {
-            DrawPreComputed(DebugDrawPrimitiveTopology.LineList, boxPositions, boxIndices, Matrix4x4.CreateScale(width, height, depth) * Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(origin), col);
+            DrawBox(CurrentList, origin, orientation, width, height, depth, col);
         }
 
         /// <summary>
@@ -988,10 +1044,14 @@ new Vector3(+1, +1, +1),
         /// <param name="orientation">The orientation (rotation) of the sphere.</param>
         /// <param name="radius">The radius of the sphere.</param>
         /// <param name="col">The color of the sphere.</param>
-        ///
+        public static void DrawSphere(DebugDrawCommandList commandList, Vector3 origin, Quaternion orientation, float radius, Vector4 col)
+        {
+            DrawPreComputed(commandList, DebugDrawPrimitiveTopology.LineList, spherePositions, sphereIndices, Matrix4x4.CreateScale(radius) * Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(origin), col);
+        }
+
         public static void DrawSphere(Vector3 origin, Quaternion orientation, float radius, Vector4 col)
         {
-            DrawPreComputed(DebugDrawPrimitiveTopology.LineList, spherePositions, sphereIndices, Matrix4x4.CreateScale(radius) * Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(origin), col);
+            DrawSphere(CurrentList, origin, orientation, radius, col);
         }
 
         #region Capsule Data
@@ -1271,9 +1331,14 @@ new Vector3(+1, +1, +1),
         /// <param name="length">The length of the capsule (excluding the two hemispheres).</param>
         /// <param name="col">The color of the capsule.</param>
         ///
+        public static void DrawCapsule(DebugDrawCommandList commandList, Vector3 origin, Quaternion orientation, float radius, float length, Vector4 col)
+        {
+            DrawPreComputed(commandList, DebugDrawPrimitiveTopology.LineList, capsulePositions, capsuleIndices, Matrix4x4.CreateScale(radius, length, radius) * Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(origin), col);
+        }
+
         public static void DrawCapsule(Vector3 origin, Quaternion orientation, float radius, float length, Vector4 col)
         {
-            DrawPreComputed(DebugDrawPrimitiveTopology.LineList, capsulePositions, capsuleIndices, Matrix4x4.CreateScale(radius, length, radius) * Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(origin), col);
+            DrawCapsule(CurrentList, origin, orientation, radius, length, col);
         }
 
         #region Cylinder Data
@@ -1431,9 +1496,14 @@ new Vector3(+1, +1, +1),
         /// <param name="length">The length of the cylinder.</param>
         /// <param name="col">The color of the cylinder.</param>
         ///
+        public static void DrawCylinder(DebugDrawCommandList commandList, Vector3 origin, Quaternion orientation, float radius, float length, Vector4 col)
+        {
+            DrawPreComputed(commandList, DebugDrawPrimitiveTopology.LineList, cylinderPositions, cylinderIndices, Matrix4x4.CreateScale(radius, length, radius) * Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(origin), col);
+        }
+
         public static void DrawCylinder(Vector3 origin, Quaternion orientation, float radius, float length, Vector4 col)
         {
-            DrawPreComputed(DebugDrawPrimitiveTopology.LineList, cylinderPositions, cylinderIndices, Matrix4x4.CreateScale(radius, length, radius) * Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(origin), col);
+            DrawCylinder(CurrentList, origin, orientation, radius, length, col);
         }
 
         /// <summary>
@@ -1446,25 +1516,30 @@ new Vector3(+1, +1, +1),
         /// <param name="c">The third vertex of the triangle.</param>
         /// <param name="col">The color of the triangle.</param>
         ///
-        public static void DrawTriangle(Vector3 origin, Quaternion orientation, Vector3 a, Vector3 b, Vector3 c, Vector4 col)
+        public static void DrawTriangle(DebugDrawCommandList commandList, Vector3 origin, Quaternion orientation, Vector3 a, Vector3 b, Vector3 c, Vector4 col)
         {
-            CurrentList.BeginDraw();
+            commandList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
 
-            CurrentList.ReserveGeometry(3, 6);
-            var indices = CurrentList.Indices + CurrentList.IndexCount;
-            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
+            commandList.ReserveGeometry(3, 6);
+            var indices = commandList.Indices + commandList.IndexCount;
+            var vertices = commandList.Vertices + commandList.VertexCount;
 
             indices[0] = 0; indices[1] = 1;
             indices[2] = 1; indices[3] = 2;
             indices[4] = 2; indices[5] = 0;
 
-            vertices[0] = new(Vector3.Transform(a, orientation) + origin, default, color);
-            vertices[1] = new(Vector3.Transform(b, orientation) + origin, default, color);
-            vertices[2] = new(Vector3.Transform(c, orientation) + origin, default, color);
+            vertices[0] = new(a, default, color);
+            vertices[1] = new(b, default, color);
+            vertices[2] = new(c, default, color);
 
-            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.TriangleList);
+            commandList.RecordCmd(DebugDrawPrimitiveTopology.TriangleList, Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(origin));
+        }
+
+        public static void DrawTriangle(Vector3 origin, Quaternion orientation, Vector3 a, Vector3 b, Vector3 c, Vector4 col)
+        {
+            DrawTriangle(CurrentList, origin, orientation, a, b, c, col);
         }
 
         /// <summary>
@@ -1478,15 +1553,15 @@ new Vector3(+1, +1, +1),
         /// <param name="col">The color of the quad.</param>
         /// <param name="texId">The texture ID of the quad.</param>
         ///
-        public static void DrawQuad(Vector3 origin, Quaternion orientation, Vector2 scale, Vector2 uv0, Vector2 uv1, Vector4 col, nint texId)
+        public static void DrawQuad(DebugDrawCommandList commandList, Vector3 origin, Quaternion orientation, Vector2 scale, Vector2 uv0, Vector2 uv1, Vector4 col, nint texId)
         {
-            CurrentList.BeginDraw();
+            commandList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
 
-            CurrentList.ReserveGeometry(4, 6);
-            var indices = CurrentList.Indices + CurrentList.IndexCount;
-            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
+            commandList.ReserveGeometry(4, 6);
+            var indices = commandList.Indices + commandList.IndexCount;
+            var vertices = commandList.Vertices + commandList.VertexCount;
 
             indices[0] = 0; indices[1] = 1; indices[2] = 2;
             indices[3] = 1; indices[4] = 2; indices[5] = 3;
@@ -1496,12 +1571,17 @@ new Vector3(+1, +1, +1),
             Vector3 p2 = new(scale.X, scale.Y, 0); // top right corner
             Vector3 p3 = new(scale.X, -scale.Y, 0); // bottom right corner
 
-            vertices[0] = new(Vector3.Transform(p0, orientation) + origin, new(uv0.X, uv1.Y), color);
-            vertices[1] = new(Vector3.Transform(p1, orientation) + origin, uv0, color);
-            vertices[2] = new(Vector3.Transform(p2, orientation) + origin, new(uv1.X, uv0.Y), color);
-            vertices[3] = new(Vector3.Transform(p3, orientation) + origin, uv1, color);
+            vertices[0] = new(p0, new(uv0.X, uv1.Y), color);
+            vertices[1] = new(p1, uv0, color);
+            vertices[2] = new(p2, new(uv1.X, uv0.Y), color);
+            vertices[3] = new(p3, uv1, color);
 
-            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.TriangleList, texId);
+            commandList.RecordCmd(DebugDrawPrimitiveTopology.TriangleList, texId, Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(origin));
+        }
+
+        public static void DrawQuad(Vector3 origin, Quaternion orientation, Vector2 scale, Vector2 uv0, Vector2 uv1, Vector4 col, nint texId)
+        {
+            DrawQuad(CurrentList, origin, orientation, scale, uv0, uv1, col, texId);
         }
 
         /// <summary>
@@ -1516,16 +1596,15 @@ new Vector3(+1, +1, +1),
         /// <param name="uv1">The UV coordinate for the top-right corner of the texture.</param>
         /// <param name="col">The color of the billboard.</param>
         /// <param name="texId">The identifier of the texture to be applied to the billboard.</param>
-        ///
-        public static void DrawQuadBillboard(Vector3 origin, Vector3 camOrigin, Vector3 camUp, Vector3 camForward, Vector2 scale, Vector2 uv0, Vector2 uv1, Vector4 col, nint texId)
+        public static void DrawQuadBillboard(DebugDrawCommandList commandList, Vector3 origin, Vector3 camOrigin, Vector3 camUp, Vector3 camForward, Vector2 scale, Vector2 uv0, Vector2 uv1, Vector4 col, nint texId)
         {
-            CurrentList.BeginDraw();
+            commandList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
 
-            CurrentList.ReserveGeometry(4, 6);
-            var indices = CurrentList.Indices + CurrentList.IndexCount;
-            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
+            commandList.ReserveGeometry(4, 6);
+            var indices = commandList.Indices + commandList.IndexCount;
+            var vertices = commandList.Vertices + commandList.VertexCount;
 
             indices[0] = 0; indices[1] = 1; indices[2] = 2;
             indices[3] = 0; indices[4] = 2; indices[5] = 3;
@@ -1537,12 +1616,17 @@ new Vector3(+1, +1, +1),
             Vector3 p2 = new(scale.X, scale.Y, 0); // top right corner
             Vector3 p3 = new(scale.X, -scale.Y, 0); // bottom right corner
 
-            vertices[0] = new(Vector3.Transform(p0, mat), new(uv0.X, uv1.Y), color);
-            vertices[1] = new(Vector3.Transform(p1, mat), uv0, color);
-            vertices[2] = new(Vector3.Transform(p2, mat), new(uv1.X, uv0.Y), color);
-            vertices[3] = new(Vector3.Transform(p3, mat), uv1, color);
+            vertices[0] = new(p0, new(uv0.X, uv1.Y), color);
+            vertices[1] = new(p1, uv0, color);
+            vertices[2] = new(p2, new(uv1.X, uv0.Y), color);
+            vertices[3] = new(p3, uv1, color);
 
-            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.TriangleList, texId);
+            commandList.RecordCmd(DebugDrawPrimitiveTopology.TriangleList, texId, mat);
+        }
+
+        public static void DrawQuadBillboard(Vector3 origin, Vector3 camOrigin, Vector3 camUp, Vector3 camForward, Vector2 scale, Vector2 uv0, Vector2 uv1, Vector4 col, nint texId)
+        {
+            DrawQuadBillboard(CurrentList, origin, camOrigin, camUp, camForward, scale, uv0, uv1, col, texId);
         }
 
         /// <summary>
@@ -1551,24 +1635,24 @@ new Vector3(+1, +1, +1),
         /// <param name="matrix">The transformation matrix defining the orientation and position of the grid.</param>
         /// <param name="size">The size of the grid (half-extent in each dimension).</param>
         /// <param name="col">The color of the grid lines.</param>
-        public static void DrawGrid(Matrix4x4 matrix, int size, Vector4 col)
+        public static void DrawGrid(DebugDrawCommandList commandList, Matrix4x4 matrix, int size, Vector4 col)
         {
-            CurrentList.BeginDraw();
+            commandList.BeginDraw();
 
             uint vertexCount = 2u * (uint)size * 2u + 4;
             uint color = ColorConvertFloat4ToU32(col);
 
-            CurrentList.ReserveGeometry(vertexCount, vertexCount);
-            var indices = CurrentList.Indices + CurrentList.IndexCount;
-            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
+            commandList.ReserveGeometry(vertexCount, vertexCount);
+            var indices = commandList.Indices + commandList.IndexCount;
+            var vertices = commandList.Vertices + commandList.VertexCount;
 
             int half = size / 2;
 
             uint i = 0;
             for (int x = -half; x <= half; x++)
             {
-                var pos0 = Vector3.Transform(new Vector3(x, 0, -half), matrix);
-                var pos1 = Vector3.Transform(new Vector3(x, 0, half), matrix);
+                var pos0 = new Vector3(x, 0, -half);
+                var pos1 = new Vector3(x, 0, half);
                 vertices[i] = new(pos0, default, color);
                 vertices[i + 1] = new(pos1, default, color);
                 indices[i] = i;
@@ -1578,8 +1662,8 @@ new Vector3(+1, +1, +1),
 
             for (int z = -half; z <= half; z++)
             {
-                var pos0 = Vector3.Transform(new Vector3(-half, 0, z), matrix);
-                var pos1 = Vector3.Transform(new Vector3(half, 0, z), matrix);
+                var pos0 = new Vector3(-half, 0, z);
+                var pos1 = new Vector3(half, 0, z);
                 vertices[i] = new(pos0, default, color);
                 vertices[i + 1] = new(pos1, default, color);
                 indices[i] = i;
@@ -1587,7 +1671,12 @@ new Vector3(+1, +1, +1),
                 i += 2;
             }
 
-            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            commandList.RecordCmd(DebugDrawPrimitiveTopology.LineList, matrix);
+        }
+
+        public static void DrawGrid(Matrix4x4 matrix, int size, Vector4 col)
+        {
+            DrawGrid(CurrentList, matrix, size, col);
         }
 
         /// <summary>
@@ -1596,7 +1685,7 @@ new Vector3(+1, +1, +1),
         /// <param name="matrix"> The transformation matrix defining the orientation and position of the grid.</param>
         /// <param name="flags"> The flags that determine which elements of the grid to draw.</param>
         /// <exception cref="InvalidOperationException"> The DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.</exception>
-        public static void DrawGrid(Matrix4x4 matrix, GridFlags flags)
+        public static void DrawGrid(DebugDrawCommandList commandList, Matrix4x4 matrix, GridFlags flags)
         {
             if (currentContext == null)
             {
@@ -1607,7 +1696,7 @@ new Vector3(+1, +1, +1),
             var size = (int)style.GridSize;
             var spacing = style.GridSpacing;
 
-            CurrentList.BeginDraw();
+            commandList.BeginDraw();
             bool axis = (flags & GridFlags.DrawAxis) != 0;
 
             uint vertexCount = 2u * (uint)size * 2u + 4;
@@ -1619,17 +1708,17 @@ new Vector3(+1, +1, +1),
 
             uint color = style.GetColorU32(DebugDrawCol.Grid);
 
-            CurrentList.ReserveGeometry(vertexCount, vertexCount);
-            var indices = CurrentList.Indices + CurrentList.IndexCount;
-            var vertices = CurrentList.Vertices + CurrentList.VertexCount;
+            commandList.ReserveGeometry(vertexCount, vertexCount);
+            var indices = commandList.Indices + commandList.IndexCount;
+            var vertices = commandList.Vertices + commandList.VertexCount;
 
             int half = size / 2;
 
             uint i = 0;
             for (int x = -half; x <= half; x++)
             {
-                var pos0 = Vector3.Transform(new Vector3(x * spacing, 0, -half), matrix);
-                var pos1 = Vector3.Transform(new Vector3(x * spacing, 0, half), matrix);
+                var pos0 = new Vector3(x * spacing, 0, -half);
+                var pos1 = new Vector3(x * spacing, 0, half);
                 vertices[i] = new(pos0, default, color);
                 vertices[i + 1] = new(pos1, default, color);
                 indices[i] = i;
@@ -1639,8 +1728,8 @@ new Vector3(+1, +1, +1),
 
             for (int z = -half; z <= half; z++)
             {
-                var pos0 = Vector3.Transform(new Vector3(-half, 0, z * spacing), matrix);
-                var pos1 = Vector3.Transform(new Vector3(half, 0, z * spacing), matrix);
+                var pos0 = new Vector3(-half, 0, z * spacing);
+                var pos1 = new Vector3(half, 0, z * spacing);
                 vertices[i] = new(pos0, default, color);
                 vertices[i + 1] = new(pos1, default, color);
                 indices[i] = i;
@@ -1655,8 +1744,8 @@ new Vector3(+1, +1, +1),
                 var axisSize = style.GridAxisSize;
 
                 {
-                    var pos0 = Vector3.Transform(new Vector3(-axisSize, 0, 0), matrix);
-                    var pos1 = Vector3.Transform(new Vector3(axisSize, 0, 0), matrix);
+                    var pos0 = new Vector3(-axisSize, 0, 0);
+                    var pos1 = new Vector3(axisSize, 0, 0);
 
                     vertices[i] = new(pos0, default, colX);
                     vertices[i + 1] = new(pos1, default, colX);
@@ -1666,8 +1755,8 @@ new Vector3(+1, +1, +1),
                 }
 
                 {
-                    var pos0 = Vector3.Transform(new Vector3(0, -axisSize, 0), matrix);
-                    var pos1 = Vector3.Transform(new Vector3(0, axisSize, 0), matrix);
+                    var pos0 = new Vector3(0, -axisSize, 0);
+                    var pos1 = new Vector3(0, axisSize, 0);
 
                     vertices[i] = new(pos0, default, colY);
                     vertices[i + 1] = new(pos1, default, colY);
@@ -1677,8 +1766,8 @@ new Vector3(+1, +1, +1),
                 }
 
                 {
-                    var pos0 = Vector3.Transform(new Vector3(0, 0, -axisSize), matrix);
-                    var pos1 = Vector3.Transform(new Vector3(0, 0, axisSize), matrix);
+                    var pos0 = new Vector3(0, 0, -axisSize);
+                    var pos1 = new Vector3(0, 0, axisSize);
                     vertices[i] = new(pos0, default, colZ);
                     vertices[i + 1] = new(pos1, default, colZ);
                     indices[i] = i;
@@ -1687,7 +1776,12 @@ new Vector3(+1, +1, +1),
                 }
             }
 
-            CurrentList.RecordCmd(DebugDrawPrimitiveTopology.LineList);
+            commandList.RecordCmd(DebugDrawPrimitiveTopology.LineList, matrix);
+        }
+
+        public static void DrawGrid(Matrix4x4 matrix, GridFlags flags)
+        {
+            DrawGrid(CurrentList, matrix, flags);
         }
     }
 }

@@ -2,6 +2,8 @@
 
 namespace Hexa.NET.DebugDraw
 {
+    using System.Numerics;
+
     /// <summary>
     /// Represents a command for debugging drawing, used for rendering primitives.
     /// </summary>
@@ -38,9 +40,9 @@ namespace Hexa.NET.DebugDraw
         public nint TextureId;
 
         /// <summary>
-        /// Gets or sets a value indicating whether depth testing should be enabled for rendering.
+        /// The transform of the draw command.
         /// </summary>
-        public bool EnableDepth;
+        public Matrix4x4 Transform;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DebugDrawCommand"/> struct.
@@ -51,8 +53,8 @@ namespace Hexa.NET.DebugDraw
         /// <param name="vertexOffset">The vertex offset in the vertex buffer (globally).</param>
         /// <param name="indexOffset">The index offset in the index buffer (globally).</param>
         /// <param name="textureId">A native integer representing a texture ID, if applicable.</param>
-        /// <param name="enableDepth">A value indicating whether depth testing should be enabled for rendering.</param>
-        public DebugDrawCommand(DebugDrawPrimitiveTopology topology, uint vertexCount, uint indexCount, uint vertexOffset, uint indexOffset, nint textureId, bool enableDepth)
+        /// <param name="transform">The transform.</param>
+        public DebugDrawCommand(DebugDrawPrimitiveTopology topology, uint vertexCount, uint indexCount, uint vertexOffset, uint indexOffset, nint textureId, Matrix4x4 transform)
         {
             Topology = topology;
             VertexCount = vertexCount;
@@ -60,7 +62,7 @@ namespace Hexa.NET.DebugDraw
             VertexOffset = vertexOffset;
             IndexOffset = indexOffset;
             TextureId = textureId;
-            EnableDepth = enableDepth;
+            Transform = transform;
         }
 
         /// <summary>
@@ -87,12 +89,12 @@ namespace Hexa.NET.DebugDraw
                 return false;
             }
 
-            if (other.IndexCount > 8000 || other.VertexCount > 5000)
+            if (other.IndexCount > 200 || other.VertexCount > 100)
             {
                 return false;
             }
 
-            return Topology == other.Topology && TextureId == other.TextureId && EnableDepth == other.EnableDepth;
+            return Topology == other.Topology && TextureId == other.TextureId;
         }
 
         public override readonly bool Equals(object obj)
@@ -108,12 +110,12 @@ namespace Hexa.NET.DebugDraw
                    VertexOffset == other.VertexOffset &&
                    IndexOffset == other.IndexOffset &&
                    TextureId.Equals(other.TextureId) &&
-                   EnableDepth == other.EnableDepth;
+                   Transform == other.Transform;
         }
 
         public override readonly int GetHashCode()
         {
-            return HashCode.Combine(Topology, VertexCount, IndexCount, VertexOffset, IndexOffset, TextureId, EnableDepth);
+            return HashCode.Combine(Topology, VertexCount, IndexCount, VertexOffset, IndexOffset, TextureId, Transform);
         }
 
         public static bool operator ==(DebugDrawCommand left, DebugDrawCommand right)

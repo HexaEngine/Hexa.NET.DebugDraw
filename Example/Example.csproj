@@ -9,6 +9,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="Hexa.NET.ImGui" Version="2.1.1" />
 		<PackageReference Include="Silk.NET" Version="2.21.0" />
 		<PackageReference Include="Silk.NET.Input.Extensions" Version="2.21.0" />
 		<PackageReference Include="Silk.NET.OpenGL" Version="2.21.0" />

@@ -3,12 +3,27 @@
     using System.Collections.Generic;
     using System.Numerics;
 
+    public struct DebugDrawStatistics
+    {
+        public uint VertexCount;
+        public uint IndexCount;
+        public uint DrawCalls;
+
+        public DebugDrawStatistics(uint vertexCount, uint indexCount, uint drawCalls)
+        {
+            VertexCount = vertexCount;
+            IndexCount = indexCount;
+            DrawCalls = drawCalls;
+        }
+    }
+
     public class DebugDrawContext : IDisposable
     {
         private readonly List<DebugDrawCommandList> commandLists = new();
         private readonly DebugDrawData drawData;
         private readonly DebugDrawCommandList immediateList;
         private DebugDrawCommandList currentCommandList;
+        private DebugDrawStatistics statistics;
 
         internal DebugDrawContext()
         {
@@ -50,6 +65,11 @@
             currentCommandList = immediateList;
         }
 
+        internal void EndFrame(DebugDrawStatistics statistics)
+        {
+            this.statistics = statistics;
+        }
+
         public void ExecuteCommandList(DebugDrawCommandList commandList)
         {
             commandLists.Add(commandList);
@@ -70,6 +90,11 @@
         internal DebugDrawData GetDrawData()
         {
             return drawData;
+        }
+
+        internal DebugDrawStatistics GetStatistics()
+        {
+            return statistics;
         }
 
         internal void Destroy()

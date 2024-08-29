@@ -3,6 +3,7 @@
 namespace Hexa.NET.DebugDraw
 {
     using Hexa.NET.Utilities;
+    using System.Numerics;
 
     /// <summary>
     /// Represents a queue of debugging drawing commands for rendering primitives.
@@ -13,11 +14,11 @@ namespace Hexa.NET.DebugDraw
         private UnsafeList<DebugDrawVert> vertices = new(vertexBufferSize);
         private UnsafeList<uint> indices = new(indexBufferSize);
 
-        private readonly List<DebugDrawCommand> queue = [];
+        private UnsafeList<DebugDrawCommand> queue = [];
 
         private uint nVerticesCmd;
         private uint nIndicesCmd;
-
+        private bool finished;
         private uint nVerticesTotal;
         private uint nIndicesTotal;
         private bool disposedValue;
@@ -57,7 +58,7 @@ namespace Hexa.NET.DebugDraw
         /// <summary>
         /// Gets the list of debug draw commands.
         /// </summary>
-        public List<DebugDrawCommand> Commands => queue;
+        public UnsafeList<DebugDrawCommand> Commands => queue;
 
         /// <summary>
         /// Gets the type of the debug draw command list.
@@ -160,19 +161,9 @@ namespace Hexa.NET.DebugDraw
         /// Records a command in the debug draw command list with the specified primitive topology.
         /// </summary>
         /// <param name="topology">The primitive topology of the command.</param>
-        public void RecordCmd(DebugDrawPrimitiveTopology topology)
+        public void RecordCmd(DebugDrawPrimitiveTopology topology, Matrix4x4 transform)
         {
-            RecordCmd(topology, 0, false);
-        }
-
-        /// <summary>
-        /// Records a command in the debug draw command list with the specified primitive topology and texture ID.
-        /// </summary>
-        /// <param name="topology">The primitive topology of the command.</param>
-        /// <param name="texId">The texture ID of the command.</param>
-        public void RecordCmd(DebugDrawPrimitiveTopology topology, nint texId)
-        {
-            RecordCmd(topology, texId, false);
+            RecordCmd(topology, 0, transform);
         }
 
         /// <summary>
@@ -181,9 +172,9 @@ namespace Hexa.NET.DebugDraw
         /// <param name="topology">The primitive topology of the command.</param>
         /// <param name="texId">The texture ID of the command.</param>
         /// <param name="enableDepth">Whether depth should be enabled for the command.</param>
-        public void RecordCmd(DebugDrawPrimitiveTopology topology, nint texId, bool enableDepth)
+        public void RecordCmd(DebugDrawPrimitiveTopology topology, nint texId, Matrix4x4 transform)
         {
-            DebugDrawCommand cmd = new(topology, nVerticesCmd, nIndicesCmd, nVerticesTotal, nIndicesTotal, texId, enableDepth);
+            DebugDrawCommand cmd = new(topology, nVerticesCmd, nIndicesCmd, nVerticesTotal, nIndicesTotal, texId, transform);
             queue.Add(cmd);
             nVerticesTotal += nVerticesCmd;
             nIndicesTotal += nIndicesCmd;
@@ -195,9 +186,16 @@ namespace Hexa.NET.DebugDraw
         /// <summary>
         /// Compacts the debug draw command list by merging compatible commands.
         /// </summary>
-        public void EndFrame()
+        public void Finish()
         {
+            if (finished)
+            {
+                return;
+            }
+
             semaphore.Wait();
+
+            finished = true;
 
             if (nVerticesTotal == 0)
             {
@@ -219,32 +217,55 @@ namespace Hexa.NET.DebugDraw
                 return;
             }
 
-            DebugDrawCommand last = queue.First();
-
+            int writeIndex = 0; // This will keep track of where to write in the list
+            DebugDrawCommand* last = queue.GetPointer(0); // Get the pointer to the first element
+            int merged = 0;
+            const int mergeThreshold = 4;
             for (int i = 1; i < queue.Count; i++)
             {
-                var cmd = queue[i];
+                DebugDrawCommand* cmd = queue.GetPointer(i); // Get the pointer to the current element
 
-                if (last.CanMerge(cmd))
+                if ((merged < mergeThreshold || Type == DebugDrawCommandListType.Deferred) && last->CanMerge(*cmd))
                 {
-                    queue.RemoveAt(i);
-                    i--;
-
-                    var vOffset = last.VertexCount;
-                    for (int j = 0; j < cmd.IndexCount; j++)
+                    // Merge cmd into last
+                    uint vOffset = last->VertexCount;
+                    for (int j = 0; j < cmd->IndexCount; j++)
                     {
-                        indices[(int)cmd.IndexOffset + j] += vOffset;
+                        indices[(int)cmd->IndexOffset + j] += vOffset;
                     }
 
-                    last.VertexCount += cmd.VertexCount;
-                    last.IndexCount += cmd.IndexCount;
+                    Matrix4x4.Invert(last->Transform, out var inverseBaseMatrix);
+                    Matrix4x4 relativeMatrix = cmd->Transform * inverseBaseMatrix;
+                    for (int j = 0; j < cmd->VertexCount; j++)
+                    {
+                        var pVertex = vertices.GetPointer((int)cmd->VertexOffset + j);
+                        pVertex->Position = Vector3.Transform(pVertex->Position, relativeMatrix);
+                    }
 
-                    cmd = last;
-                    queue[i] = cmd;
+                    merged++;
+
+                    // Update the last element with merged values
+                    last->VertexCount += cmd->VertexCount;
+                    last->IndexCount += cmd->IndexCount;
                 }
+                else
+                {
+                    merged = 0;
+                    // Move the "write" pointer up, if necessary, to avoid overlap
+                    writeIndex++;
+                    if (writeIndex != i)
+                    {
+                        // Copy the cmd to the new write position
+                        *queue.GetPointer(writeIndex) = *cmd;
+                    }
 
-                last = cmd;
+                    // Update last to the new "last" element
+                    last = queue.GetPointer(writeIndex);
+                }
             }
+
+            // Adjust the size of the queue if necessary to remove any unused elements at the end
+            queue.Resize(writeIndex + 1);
         }
 
         /// <summary>
@@ -259,7 +280,7 @@ namespace Hexa.NET.DebugDraw
             nVerticesCmd = 0;
             nIndicesTotal = 0;
             nIndicesCmd = 0;
-
+            finished = false;
             semaphore.Release();
         }
 
@@ -270,7 +291,7 @@ namespace Hexa.NET.DebugDraw
                 semaphore.Dispose();
                 vertices.Release();
                 indices.Release();
-                queue.Clear();
+                queue.Release();
                 disposedValue = true;
             }
         }

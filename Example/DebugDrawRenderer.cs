@@ -17,6 +17,9 @@ using Silk.NET.OpenGL.Legacy;
 
     using Silk.NET.Windowing;
     using System.Numerics;
+    using Silk.NET.SDL;
+    using System.Diagnostics;
+    using Hexa.NET.ImGui;
 
     public class DebugDrawRenderer
     {
@@ -29,7 +32,6 @@ using Silk.NET.OpenGL.Legacy;
         private int _attribLocationVtxColor;
         private uint _vboHandle;
         private uint _elementsHandle;
-        private uint _vertexArrayObject;
 
         private Texture _fontTexture;
         private Shader _shader;
@@ -59,8 +61,12 @@ using Silk.NET.OpenGL.Legacy;
         /// </summary>
         public void EndDraw()
         {
+            Profiler.Begin("DebugDraw.Render");
             DebugDraw.Render();
+            Profiler.EndImGui("DebugDraw.Render");
+            Profiler.Begin("DebugDraw.Render.OpenGL");
             Render(DebugDraw.GetDrawData());
+            Profiler.EndImGui("DebugDraw.Render.OpenGL");
         }
 
         /// <summary>
@@ -72,7 +78,7 @@ using Silk.NET.OpenGL.Legacy;
             DebugDraw.NewFrame();
         }
 
-        private unsafe void SetupRenderState(DebugDrawData drawData)
+        private unsafe void SetupRenderState(DebugDrawData drawData, uint vertex_array_object)
         {
             // Setup render state: alpha-blending enabled, no face culling, no depth testing, scissor enabled, polygon fill
             _gl.Enable(GLEnum.Blend);
@@ -92,20 +98,14 @@ using Silk.NET.OpenGL.Legacy;
             _gl.PolygonMode(GLEnum.FrontAndBack, GLEnum.Fill);
 #endif
 
-            var camera = drawData.Camera;
             _shader.UseShader();
             _gl.Uniform1(_attribLocationTex, 0);
-            _gl.UniformMatrix4(_attribLocationProjMtx, 1, false, (float*)&camera);
-            _gl.CheckGlError("Projection");
+            /*GL_CALL*/
 
             _gl.BindSampler(0, 0);
 
-            // Setup desired GL state
-            // Recreate the VAO every time (this is to easily allow multiple GL contexts to be rendered to. VAO are not shared among GL contexts)
-            // The renderer would actually work without any VAO bound, but then our VertexAttrib calls would overwrite the default one currently bound.
-            _vertexArrayObject = _gl.GenVertexArray();
-            _gl.BindVertexArray(_vertexArrayObject);
-            _gl.CheckGlError("VAO");
+            _gl.BindVertexArray(vertex_array_object);
+            /*GL_CALL*/
 
             // Bind vertex/index buffers and setup attributes for ImDrawVert
             _gl.BindBuffer(GLEnum.ArrayBuffer, _vboHandle);
@@ -165,22 +165,37 @@ using Silk.NET.OpenGL.Legacy;
             bool lastEnablePrimitiveRestart = _gl.IsEnabled(GLEnum.PrimitiveRestart);
 #endif
 
-            SetupRenderState(drawData);
+            // Setup desired GL state
+            // Recreate the VAO every time (this is to easily allow multiple GL contexts to be rendered to. VAO are not shared among GL contexts)
+            // The renderer would actually work without any VAO bound, but then our VertexAttrib calls would overwrite the default one currently bound.
+            uint vertex_array_object = 0;
+
+            /*GL_CALL*/
+            _gl.GenVertexArrays(1, &vertex_array_object);
+
+            SetupRenderState(drawData, vertex_array_object);
+
+            var camera = drawData.Camera;
+
             for (int i = 0; i < drawData.CmdLists.Count; i++)
             {
                 var list = drawData.CmdLists[i];
                 // Upload vertex/index buffers
 
                 _gl.BufferData(GLEnum.ArrayBuffer, (nuint)(list.VertexCount * sizeof(DebugDrawVert)), list.Vertices, GLEnum.StreamDraw);
-                _gl.CheckGlError($"Data Vert {0}");
+                /*GL_CALL*/
                 _gl.BufferData(GLEnum.ElementArrayBuffer, list.IndexCount * sizeof(uint), list.Indices, GLEnum.StreamDraw);
-                _gl.CheckGlError($"Data Idx {0}");
+                /*GL_CALL*/
 
                 int voffset = 0;
                 uint ioffset = 0;
                 for (int cmd_i = 0; cmd_i < list.Commands.Count; cmd_i++)
                 {
                     DebugDrawCommand cmd = list.Commands[cmd_i];
+
+                    Matrix4x4 mvp = cmd.Transform * camera;
+
+                    _gl.UniformMatrix4(_attribLocationProjMtx, 1, false, (float*)&mvp);
 
                     /*
                     Vector4 clipRect;
@@ -202,12 +217,12 @@ using Silk.NET.OpenGL.Legacy;
 
                     // Bind texture, Draw
                     _gl.BindTexture(GLEnum.Texture2D, texId);
-                    _gl.CheckGlError("Texture");
+                    /*GL_CALL*/
 
                     GLEnum prim = GetPrim(cmd.Topology);
 
                     _gl.DrawElementsBaseVertex(prim, cmd.IndexCount, GLEnum.UnsignedInt, (void*)(ioffset * sizeof(uint)), voffset);
-                    _gl.CheckGlError("Draw");
+                    /*GL_CALL*/
 
                     voffset += (int)cmd.VertexCount;
                     ioffset += cmd.IndexCount;
@@ -215,8 +230,7 @@ using Silk.NET.OpenGL.Legacy;
             }
 
             // Destroy the temporary VAO
-            _gl.DeleteVertexArray(_vertexArrayObject);
-            _vertexArrayObject = 0;
+            _gl.DeleteVertexArray(vertex_array_object);
 
             // Restore modified GL state
             _gl.UseProgram((uint)lastProgram);
@@ -495,7 +509,6 @@ using Silk.NET.OpenGL.Legacy;
 
             _gl.DeleteBuffer(_vboHandle);
             _gl.DeleteBuffer(_elementsHandle);
-            _gl.DeleteVertexArray(_vertexArrayObject);
 
             _fontTexture.Dispose();
             _shader.Dispose();

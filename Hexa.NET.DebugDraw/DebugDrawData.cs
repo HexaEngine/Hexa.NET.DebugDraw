@@ -2,6 +2,7 @@
 
 namespace Hexa.NET.DebugDraw
 {
+    using System;
     using System.Numerics;
 
     /// <summary>
@@ -42,6 +43,12 @@ namespace Hexa.NET.DebugDraw
         public DebugDrawData(List<DebugDrawCommandList> cmdLists)
         {
             CmdLists = cmdLists;
+        }
+
+        public void Clear()
+        {
+            TotalIndices = 0;
+            TotalVertices = 0;
         }
     }
 }

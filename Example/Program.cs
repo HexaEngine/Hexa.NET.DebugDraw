@@ -1,10 +1,12 @@
 ﻿namespace Example
 {
     using Hexa.NET.DebugDraw;
+    using Hexa.NET.ImGui;
     using Hexa.NET.Mathematics;
     using Silk.NET.Input;
     using Silk.NET.OpenGL;
     using Silk.NET.Windowing;
+    using System.Diagnostics;
     using System.Numerics;
 
     internal class Program
@@ -16,11 +18,13 @@
 
             // Declare some variables
             DebugDrawRenderer renderer = null!;
+            ImGuiController controller = null!;
             GL gl = null!;
             IInputContext inputContext = null!;
             IMouse mouse = null!;
             IKeyboard keyboard = null!;
             Vector2 lastMousePos = default;
+            DebugDrawCommandList list = new(DebugDrawCommandListType.Deferred);
 
             // Our loading function
             window.Load += () =>
@@ -33,14 +37,16 @@
                 mouse = inputContext.Mice[0];
                 keyboard = inputContext.Keyboards[0];
                 lastMousePos = mouse.Position;
-            };
+                controller = new(gl, window, inputContext);
 
-            // Handle resizes
-            window.FramebufferResize += s =>
-            {
-                // Adjust the viewport to the new window size
-                gl.Viewport(s);
-                DebugDraw.SetViewport(Vector2.Zero, new(s.X, s.Y));
+                for (int i = 0; i < 100; i++)
+                {
+                    for (int j = 0; j < 100; j++)
+                    {
+                        DebugDraw.DrawSphere(list, new(-2 * i, 4 * j, 5 * MathF.Cos(j) * MathF.Sin(i)), Quaternion.Identity, 1, new(0, 1, 0, 1));
+                    }
+                }
+                list.Finish();
             };
 
             Vector3 position = new(-5, 5, -5);
@@ -55,12 +61,24 @@
 
             Matrix4x4 vp = view * projection;
 
+            // Handle resizes
+            window.FramebufferResize += s =>
+            {
+                // Adjust the viewport to the new window size
+                gl.Viewport(s);
+                DebugDraw.SetViewport(Vector2.Zero, new(s.X, s.Y));
+                projection = MathUtil.PerspectiveFovLH(90f.ToRad(), s.X / s.Y, 0.1f, 1000f);
+                Update(position, rotation, out orientation, projection, out vp);
+            };
+
             // The render function
             window.Render += delta =>
             {
                 var now = mouse.Position;
                 var mouseDelta = now - lastMousePos;
                 lastMousePos = now;
+
+                controller.Update((float)delta);
 
                 if (mouseDelta != Vector2.Zero && mouse.IsButtonPressed(MouseButton.Left))
                 {
@@ -121,11 +139,21 @@
 
                 DebugDraw.DrawBox(new(2, 4, 5), Quaternion.Identity, 1, 1, 1, new(1, 0, 0, 1));
 
-                DebugDraw.DrawSphere(new(-2, 4, 5), Quaternion.Identity, 1, new(0, 1, 0, 1));
+                DebugDraw.ExecuteCommandList(list);
 
                 DebugDraw.DrawCapsule(new(0, 4, 5), Quaternion.Identity, 0.5f, 2, new(0, 0, 1, 1));
 
+                Profiler.Begin("DebugDraw");
                 renderer.EndDraw();
+                Profiler.EndImGui("DebugDraw");
+
+                var stats = DebugDraw.GetStatistics();
+
+                ImGui.Text($"Verts: {stats.VertexCount}");
+                ImGui.Text($"Idxs: {stats.IndexCount}");
+                ImGui.Text($"Calls: {stats.DrawCalls}");
+
+                controller.Render();
             };
 
             // The closing function
@@ -139,7 +167,7 @@
                 // Unload OpenGL
                 gl?.Dispose();
             };
-
+            window.VSync = false;
             // Now that everything's defined, let's run this bad boy!
             window.Run();
 
