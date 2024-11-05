@@ -2,15 +2,20 @@
 {
     using Hexa.NET.DebugDraw;
     using Hexa.NET.ImGui;
+    using Hexa.NET.ImGui.Backends.GLFW;
+    using Hexa.NET.ImGui.Backends.SDL2;
     using Hexa.NET.Mathematics;
     using Silk.NET.Input;
+    using Silk.NET.OpenAL;
     using Silk.NET.OpenGL;
     using Silk.NET.Windowing;
     using System.Diagnostics;
     using System.Numerics;
 
-    internal class Program
+    internal unsafe class Program
     {
+        public static ImGuiContextPtr Context { get; private set; }
+
         private static void Main(string[] args)
         {
             // Create a Silk.NET window as usual
@@ -33,11 +38,20 @@
                     gl = window.CreateOpenGL(), // load OpenGL,
                     window
                 );
+
                 inputContext = window.CreateInput();
                 mouse = inputContext.Mice[0];
                 keyboard = inputContext.Keyboards[0];
                 lastMousePos = mouse.Position;
-                controller = new(gl, window, inputContext);
+
+                var kind = window.Native.Kind;
+
+                Context = ImGui.CreateContext();
+                ImGui.SetCurrentContext(Context);
+                ImGui.StyleColorsDark();
+
+                controller = new();
+                controller.InitForOpenGL3(window);
 
                 for (int i = 0; i < 100; i++)
                 {
@@ -78,7 +92,7 @@
                 var mouseDelta = now - lastMousePos;
                 lastMousePos = now;
 
-                controller.Update((float)delta);
+                controller.Update();
 
                 if (mouseDelta != Vector2.Zero && mouse.IsButtonPressed(MouseButton.Left))
                 {

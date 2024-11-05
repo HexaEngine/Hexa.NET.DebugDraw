@@ -35,6 +35,16 @@ namespace Hexa.NET.DebugDraw
         public uint IndexOffset;
 
         /// <summary>
+        /// Gets or sets the instance count.
+        /// </summary>
+        public uint InstanceCount;
+
+        /// <summary>
+        ///
+        /// </summary>
+        public uint InstanceOffset;
+
+        /// <summary>
         /// Gets or sets a native integer representing a texture ID, if applicable.
         /// </summary>
         public nint TextureId;

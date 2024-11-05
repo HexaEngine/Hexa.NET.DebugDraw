@@ -15,6 +15,8 @@ namespace Hexa.NET.DebugDraw
         private UnsafeList<uint> indices = new(indexBufferSize);
 
         private UnsafeList<DebugDrawCommand> queue = [];
+        private UnsafeDictionary<(ShapeId id, nint texId), int> map = [];
+        private UnsafeList<InstanceData> instanceData = [];
 
         private uint nVerticesCmd;
         private uint nIndicesCmd;
@@ -68,6 +70,17 @@ namespace Hexa.NET.DebugDraw
         public void BeginDraw()
         {
             semaphore.Wait();
+        }
+
+        public void BeginDraw(ShapeId id, nint texId, Matrix4x4 transform, Vector4 color)
+        {
+            semaphore.Wait();
+            var key = (id, texId);
+
+            if (map.TryGetValue(key, out var index))
+            {
+                var pCmd = queue.GetPointer(index);
+            }
         }
 
         /// <summary>
