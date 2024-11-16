@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>net8.0;netstandard2.1</TargetFrameworks>
+		<TargetFrameworks>net9.0;net8.0;net7.0;net6.0;netstandard2.1;netstandard2.0</TargetFrameworks>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -18,7 +18,7 @@
 	<PropertyGroup>
 		<PackageId>Hexa.NET.DebugDraw</PackageId>
 		<AssemblyVersion>1.0.0</AssemblyVersion>
-		<PackageVersion>2.3.1</PackageVersion>
+		<PackageVersion>2.3.2</PackageVersion>
 		<Description>This library is a simple 3D debug drawing library for the HexaEngine in Immediate-mode</Description>
 		<PackageTags>HexaEngine Hexa C# .NET DotNet Sharp Native Drawing Debug 3D</PackageTags>
 		<Authors>Juna Meinhold</Authors>
@@ -38,7 +38,13 @@
 	</ItemGroup>
 	
 	<ItemGroup>
-		<PackageReference Include="Hexa.NET.Utilities" Version="2.1.5" />
+		<PackageReference Include="Hexa.NET.Utilities" Version="2.1.14" />	
 	</ItemGroup>
+
+	<ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+		<PackageReference Include="Microsoft.Bcl.Numerics" Version="9.0.0" />
+		<PackageReference Include="Microsoft.Bcl.HashCode" Version="6.0.0" />
+	</ItemGroup>
+
 
 </Project>

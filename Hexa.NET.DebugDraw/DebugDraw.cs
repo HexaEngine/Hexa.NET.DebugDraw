@@ -330,15 +330,15 @@
 
         public static void DrawFrustum(DebugDrawCommandList commandList, Span<Vector3> frustumCorners, Vector4 col)
         {
-            if (frustumCorners.Length < 9)
+            if (frustumCorners.Length < 8)
             {
-                throw new ArgumentException("Frustum must have 9 corners", nameof(frustumCorners));
+                throw new ArgumentException("Frustum must have 8 corners", nameof(frustumCorners));
             }
             commandList.BeginDraw();
 
             uint color = ColorConvertFloat4ToU32(col);
 
-            commandList.ReserveGeometry(9, 24);
+            commandList.ReserveGeometry(8, 24);
             var indices = commandList.Indices + commandList.IndexCount;
             var vertices = commandList.Vertices + commandList.VertexCount;
 
@@ -355,7 +355,7 @@
             indices[20] = 6; indices[21] = 7;
             indices[22] = 7; indices[23] = 4;
 
-            for (int i = 0; i < 9; i++)
+            for (int i = 0; i < 8; i++)
             {
                 vertices[i].Color = color;
                 vertices[i].Position = frustumCorners[i];
