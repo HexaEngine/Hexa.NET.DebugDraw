@@ -45,9 +45,8 @@ using Silk.NET.OpenGL.Legacy;
         /// </summary>
         public DebugDrawRenderer(GL gl, IWindow window)
         {
+            context = DebugDraw.GetCurrentContext();
             _gl = gl;
-            context = DebugDraw.CreateContext();
-            context.SetViewport(Vector2.Zero, new(window.Size.X, window.Size.Y));
             CreateDeviceObjects();
         }
 

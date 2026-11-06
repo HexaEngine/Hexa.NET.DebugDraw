@@ -7,7 +7,7 @@
     /// <summary>
     /// Provides a utility for immediate mode debugging to draw 3D shapes.
     /// </summary>
-    public static unsafe class DebugDraw
+    public static unsafe partial class DebugDraw
     {
         private static DebugDrawContext? currentContext;
 
@@ -35,6 +35,11 @@
         public static void SetCurrentContext(DebugDrawContext? context)
         {
             currentContext = context;
+        }
+
+        public static DebugDrawContext? GetCurrentContext()
+        {
+            return currentContext;
         }
 
         /// <summary>
@@ -95,7 +100,7 @@
             return currentContext.GetStatistics();
         }
 
-        public static DebugDrawCommandList CurrentList
+        public static DebugDrawCommandListPtr CurrentList
         {
             get
             {
@@ -213,7 +218,7 @@
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void DrawPreComputed(DebugDrawCommandList commandList, DebugDrawPrimitiveTopology topology, Vector3[] positions, uint[] indices, Matrix4x4 matrix, Vector4 color)
+        private static void DrawPreComputed(DebugDrawCommandListPtr commandList, DebugDrawPrimitiveTopology topology, Vector3[] positions, uint[] indices, Matrix4x4 matrix, Vector4 color)
         {
             commandList.BeginDraw();
             commandList.AddIndexRange(indices);
@@ -261,7 +266,7 @@
         /// Gets the queue of debug draw commands for immediate mode rendering.
         /// </summary>
         /// <returns>The debug draw command queue.</returns>
-        public static DebugDrawCommandList GetImmediateCommandList()
+        public static DebugDrawCommandListPtr GetImmediateCommandList()
         {
             return CurrentList;
         }
@@ -271,7 +276,7 @@
         /// </summary>
         /// <param name="commandList">The debug draw command list to execute.</param>
         /// <exception cref="InvalidOperationException">Thrown if the provided command list is not of type Deferred.</exception>
-        public static void ExecuteCommandList(DebugDrawCommandList commandList)
+        public static void ExecuteCommandList(DebugDrawCommandListPtr commandList)
         {
             if (commandList.Type != DebugDrawCommandListType.Deferred)
             {
@@ -286,7 +291,22 @@
             currentContext.ExecuteCommandList(commandList);
         }
 
-        public static void DrawFrustum(DebugDrawCommandList commandList, Vector3* frustumCorners, int cornerCount, Vector4 col)
+        /// <summary>
+        /// Frees a deferred debug draw command list and releases its resources.
+        /// </summary>
+        /// <param name="commandList">The debug draw command list to free.</param>
+        /// <exception cref="InvalidOperationException">Thrown if the context is not set or if trying to free the immediate list.</exception>
+        public static void FreeCommandList(DebugDrawCommandListPtr commandList)
+        {
+            if (currentContext == null)
+            {
+                throw new InvalidOperationException("DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.");
+            }
+
+            currentContext.FreeCommandList(commandList);
+        }
+
+        public static void DrawFrustum(DebugDrawCommandListPtr commandList, Vector3* frustumCorners, int cornerCount, Vector4 col)
         {
             if (cornerCount != 9)
             {
@@ -328,7 +348,7 @@
             DrawFrustum(CurrentList, frustumCorners, cornerCount, col);
         }
 
-        public static void DrawFrustum(DebugDrawCommandList commandList, Span<Vector3> frustumCorners, Vector4 col)
+        public static void DrawFrustum(DebugDrawCommandListPtr commandList, Span<Vector3> frustumCorners, Vector4 col)
         {
             if (frustumCorners.Length < 8)
             {
@@ -376,7 +396,7 @@
         /// <param name="box">The bounding box to be drawn.</param>
         /// <param name="col">The color of the box.</param>
         ///
-        public static void DrawBoundingBox(DebugDrawCommandList commandList, Vector3 min, Vector3 max, Vector4 col)
+        public static void DrawBoundingBox(DebugDrawCommandListPtr commandList, Vector3 min, Vector3 max, Vector4 col)
         {
             commandList.BeginDraw();
 
@@ -621,7 +641,7 @@
 
         #endregion Sphere Data
 
-        public static void DrawBoundingSphere(DebugDrawCommandList commandList, Vector3 center, float radius, Vector4 col)
+        public static void DrawBoundingSphere(DebugDrawCommandListPtr commandList, Vector3 center, float radius, Vector4 col)
         {
             DrawPreComputed(commandList, DebugDrawPrimitiveTopology.LineList, spherePositions, sphereIndices, Matrix4x4.CreateScale(radius) * Matrix4x4.CreateTranslation(center), col);
         }
@@ -639,7 +659,7 @@
         /// <param name="normalize">True if the direction vector should be normalized; otherwise, false.</param>
         /// <param name="col">The color of the ray.</param>
         ///
-        public static void DrawRay(DebugDrawCommandList commandList, Vector3 origin, Vector3 direction, bool normalize, Vector4 col)
+        public static void DrawRay(DebugDrawCommandListPtr commandList, Vector3 origin, Vector3 direction, bool normalize, Vector4 col)
         {
             commandList.BeginDraw();
 
@@ -696,7 +716,7 @@
         /// <param name="normalize">True if the direction vector should be normalized; otherwise, false.</param>
         /// <param name="col">The color of the line.</param>
         ///
-        public static void DrawLine(DebugDrawCommandList commandList, Vector3 origin, Vector3 direction, bool normalize, Vector4 col)
+        public static void DrawLine(DebugDrawCommandListPtr commandList, Vector3 origin, Vector3 direction, bool normalize, Vector4 col)
         {
             commandList.BeginDraw();
 
@@ -738,7 +758,7 @@
         /// <param name="destination">The ending point of the line.</param>
         /// <param name="col">The color of the line.</param>
         ///
-        public static void DrawLine(DebugDrawCommandList commandList, Vector3 origin, Vector3 destination, Vector4 col)
+        public static void DrawLine(DebugDrawCommandListPtr commandList, Vector3 origin, Vector3 destination, Vector4 col)
         {
             commandList.BeginDraw();
 
@@ -771,7 +791,7 @@
         /// <param name="minorAxis">The minor axis of the ring.</param>
         /// <param name="col">The color of the ring.</param>
         ///
-        public static void DrawRing(DebugDrawCommandList commandList, Vector3 origin, Quaternion orientation, Vector3 majorAxis, Vector3 minorAxis, Vector4 col)
+        public static void DrawRing(DebugDrawCommandListPtr commandList, Vector3 origin, Quaternion orientation, Vector3 majorAxis, Vector3 minorAxis, Vector4 col)
         {
             commandList.BeginDraw();
 
@@ -829,7 +849,7 @@
         /// <param name="minorAxis">The minor axis of the ring.</param>
         /// <param name="col">The color of the ring.</param>
         ///
-        public static void DrawRing(DebugDrawCommandList commandList, Vector3 origin, Vector3 majorAxis, Vector3 minorAxis, Vector4 col)
+        public static void DrawRing(DebugDrawCommandListPtr commandList, Vector3 origin, Vector3 majorAxis, Vector3 minorAxis, Vector4 col)
         {
             commandList.BeginDraw();
 
@@ -886,7 +906,7 @@
         /// <param name="ellipse">The major axis and minor axis of the ring.</param>
         /// <param name="col">The color of the ring.</param>
         ///
-        public static void DrawRing(DebugDrawCommandList commandList, Vector3 origin, (Vector3 majorAxis, Vector3 minorAxis) ellipse, Vector4 col)
+        public static void DrawRing(DebugDrawCommandListPtr commandList, Vector3 origin, (Vector3 majorAxis, Vector3 minorAxis) ellipse, Vector4 col)
         {
             commandList.BeginDraw();
 
@@ -949,7 +969,7 @@
         /// <param name="ellipse">Tuple containing major and minor axes of the ellipse defining the ring.</param>
         /// <param name="col">Color of the ring.</param>
         ///
-        public static void DrawRingBillboard(DebugDrawCommandList commandList, Vector3 origin, Vector3 camPos, Vector3 camUp, Vector3 camForward, (Vector3 majorAxis, Vector3 minorAxis) ellipse, Vector4 col)
+        public static void DrawRingBillboard(DebugDrawCommandListPtr commandList, Vector3 origin, Vector3 camPos, Vector3 camUp, Vector3 camForward, (Vector3 majorAxis, Vector3 minorAxis) ellipse, Vector4 col)
         {
             commandList.BeginDraw();
 
@@ -1027,7 +1047,7 @@ new Vector3(+1, +1, +1),
         /// <param name="height">The height of the box.</param>
         /// <param name="depth">The depth of the box.</param>
         /// <param name="col">The color of the box.</param>
-        public static void DrawBox(DebugDrawCommandList commandList, Vector3 origin, Quaternion orientation, float width, float height, float depth, Vector4 col)
+        public static void DrawBox(DebugDrawCommandListPtr commandList, Vector3 origin, Quaternion orientation, float width, float height, float depth, Vector4 col)
         {
             DrawPreComputed(commandList, DebugDrawPrimitiveTopology.LineList, boxPositions, boxIndices, Matrix4x4.CreateScale(width, height, depth) * Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(origin), col);
         }
@@ -1044,14 +1064,35 @@ new Vector3(+1, +1, +1),
         /// <param name="orientation">The orientation (rotation) of the sphere.</param>
         /// <param name="radius">The radius of the sphere.</param>
         /// <param name="col">The color of the sphere.</param>
-        public static void DrawSphere(DebugDrawCommandList commandList, Vector3 origin, Quaternion orientation, float radius, Vector4 col)
+        public static void DrawSphere(DebugDrawCommandListPtr commandList, Vector3 origin, Quaternion orientation, Vector3 radius, Vector4 col)
         {
             DrawPreComputed(commandList, DebugDrawPrimitiveTopology.LineList, spherePositions, sphereIndices, Matrix4x4.CreateScale(radius) * Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(origin), col);
         }
 
-        public static void DrawSphere(Vector3 origin, Quaternion orientation, float radius, Vector4 col)
+        public static void DrawSphere(DebugDrawCommandListPtr commandList, in Matrix4x4 transform, Vector4 col)
+        {
+            DrawPreComputed(commandList, DebugDrawPrimitiveTopology.LineList, spherePositions, sphereIndices, transform, col);
+        }
+
+
+        public static void DrawSphere(DebugDrawCommandListPtr commandList, Vector3 origin, Quaternion orientation, float radius, Vector4 col)
+        {
+            DrawSphere(commandList, origin, orientation, new Vector3(radius), col);
+        }
+
+        public static void DrawSphere(Vector3 origin, Quaternion orientation, Vector3 radius, Vector4 col)
         {
             DrawSphere(CurrentList, origin, orientation, radius, col);
+        }
+
+        public static void DrawSphere(in Matrix4x4 transform, Vector4 col)
+        {
+            DrawSphere(CurrentList, transform, col);
+        }
+
+        public static void DrawSphere(Vector3 origin, Quaternion orientation, float radius, Vector4 col)
+        {
+            DrawSphere(CurrentList, origin, orientation, new Vector3(radius), col);
         }
 
         #region Capsule Data
@@ -1331,7 +1372,7 @@ new Vector3(+1, +1, +1),
         /// <param name="length">The length of the capsule (excluding the two hemispheres).</param>
         /// <param name="col">The color of the capsule.</param>
         ///
-        public static void DrawCapsule(DebugDrawCommandList commandList, Vector3 origin, Quaternion orientation, float radius, float length, Vector4 col)
+        public static void DrawCapsule(DebugDrawCommandListPtr commandList, Vector3 origin, Quaternion orientation, float radius, float length, Vector4 col)
         {
             DrawPreComputed(commandList, DebugDrawPrimitiveTopology.LineList, capsulePositions, capsuleIndices, Matrix4x4.CreateScale(radius, length, radius) * Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(origin), col);
         }
@@ -1496,7 +1537,7 @@ new Vector3(+1, +1, +1),
         /// <param name="length">The length of the cylinder.</param>
         /// <param name="col">The color of the cylinder.</param>
         ///
-        public static void DrawCylinder(DebugDrawCommandList commandList, Vector3 origin, Quaternion orientation, float radius, float length, Vector4 col)
+        public static void DrawCylinder(DebugDrawCommandListPtr commandList, Vector3 origin, Quaternion orientation, float radius, float length, Vector4 col)
         {
             DrawPreComputed(commandList, DebugDrawPrimitiveTopology.LineList, cylinderPositions, cylinderIndices, Matrix4x4.CreateScale(radius, length, radius) * Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(origin), col);
         }
@@ -1516,7 +1557,7 @@ new Vector3(+1, +1, +1),
         /// <param name="c">The third vertex of the triangle.</param>
         /// <param name="col">The color of the triangle.</param>
         ///
-        public static void DrawTriangle(DebugDrawCommandList commandList, Vector3 origin, Quaternion orientation, Vector3 a, Vector3 b, Vector3 c, Vector4 col)
+        public static void DrawTriangle(DebugDrawCommandListPtr commandList, Vector3 origin, Quaternion orientation, Vector3 a, Vector3 b, Vector3 c, Vector4 col)
         {
             commandList.BeginDraw();
 
@@ -1553,7 +1594,7 @@ new Vector3(+1, +1, +1),
         /// <param name="col">The color of the quad.</param>
         /// <param name="texId">The texture ID of the quad.</param>
         ///
-        public static void DrawQuad(DebugDrawCommandList commandList, Vector3 origin, Quaternion orientation, Vector2 scale, Vector2 uv0, Vector2 uv1, Vector4 col, nint texId)
+        public static void DrawQuad(DebugDrawCommandListPtr commandList, Vector3 origin, Quaternion orientation, Vector2 scale, Vector2 uv0, Vector2 uv1, Vector4 col, nint texId)
         {
             commandList.BeginDraw();
 
@@ -1596,7 +1637,7 @@ new Vector3(+1, +1, +1),
         /// <param name="uv1">The UV coordinate for the top-right corner of the texture.</param>
         /// <param name="col">The color of the billboard.</param>
         /// <param name="texId">The identifier of the texture to be applied to the billboard.</param>
-        public static void DrawQuadBillboard(DebugDrawCommandList commandList, Vector3 origin, Vector3 camOrigin, Vector3 camUp, Vector3 camForward, Vector2 scale, Vector2 uv0, Vector2 uv1, Vector4 col, nint texId)
+        public static void DrawQuadBillboard(DebugDrawCommandListPtr commandList, Vector3 origin, Vector3 camOrigin, Vector3 camUp, Vector3 camForward, Vector2 scale, Vector2 uv0, Vector2 uv1, Vector4 col, nint texId)
         {
             commandList.BeginDraw();
 
@@ -1635,7 +1676,7 @@ new Vector3(+1, +1, +1),
         /// <param name="matrix">The transformation matrix defining the orientation and position of the grid.</param>
         /// <param name="size">The size of the grid (half-extent in each dimension).</param>
         /// <param name="col">The color of the grid lines.</param>
-        public static void DrawGrid(DebugDrawCommandList commandList, Matrix4x4 matrix, int size, Vector4 col)
+        public static void DrawGrid(DebugDrawCommandListPtr commandList, Matrix4x4 matrix, int size, Vector4 col)
         {
             commandList.BeginDraw();
 
@@ -1685,7 +1726,7 @@ new Vector3(+1, +1, +1),
         /// <param name="matrix"> The transformation matrix defining the orientation and position of the grid.</param>
         /// <param name="flags"> The flags that determine which elements of the grid to draw.</param>
         /// <exception cref="InvalidOperationException"> The DebugDraw context is not set. Call DebugDraw.SetContext() before drawing.</exception>
-        public static void DrawGrid(DebugDrawCommandList commandList, Matrix4x4 matrix, GridFlags flags)
+        public static void DrawGrid(DebugDrawCommandListPtr commandList, Matrix4x4 matrix, GridFlags flags)
         {
             if (currentContext == null)
             {

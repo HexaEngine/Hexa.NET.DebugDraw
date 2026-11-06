@@ -38,7 +38,7 @@
 	</ItemGroup>
 	
 	<ItemGroup>
-		<PackageReference Include="Hexa.NET.Utilities" Version="2.1.14" />	
+		<PackageReference Include="Hexa.NET.Utilities" Version="2.2.10" />	
 	</ItemGroup>
 
 	<ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">

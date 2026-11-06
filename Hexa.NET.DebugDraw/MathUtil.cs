@@ -6,6 +6,8 @@
 
     internal static class MathUtil
     {
+        public const float Tau = 2 * MathF.PI;
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Matrix4x4 BillboardLH(Vector3 objectPosition, Vector3 cameraPosition, Vector3 cameraUpVector, Vector3 cameraForwardVector)
         {

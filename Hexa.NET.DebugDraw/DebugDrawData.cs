@@ -2,6 +2,7 @@
 
 namespace Hexa.NET.DebugDraw
 {
+    using Hexa.NET.Utilities;
     using System;
     using System.Numerics;
 
@@ -13,7 +14,7 @@ namespace Hexa.NET.DebugDraw
         /// <summary>
         /// Gets the list of debug draw command lists.
         /// </summary>
-        public List<DebugDrawCommandList> CmdLists { get; }
+        public UnsafeList<DebugDrawCommandListPtr> CmdLists;
 
         /// <summary>
         /// Gets or sets the total number of vertices.
@@ -40,15 +41,15 @@ namespace Hexa.NET.DebugDraw
             CmdLists = [];
         }
 
-        public DebugDrawData(List<DebugDrawCommandList> cmdLists)
-        {
-            CmdLists = cmdLists;
-        }
-
         public void Clear()
         {
             TotalIndices = 0;
             TotalVertices = 0;
+        }
+
+        public void Dispose()
+        {
+            CmdLists.Release();
         }
     }
 }

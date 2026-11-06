@@ -8,9 +8,9 @@ namespace Hexa.NET.DebugDraw
     /// <summary>
     /// Represents a queue of debugging drawing commands for rendering primitives.
     /// </summary>
-    public unsafe class DebugDrawCommandList : IDisposable
+    public unsafe struct DebugDrawCommandList : IDisposable
     {
-        private readonly SemaphoreSlim semaphore = new(1);
+        private GCObject<SemaphoreSlim> semaphore = new(new SemaphoreSlim(1));
         private UnsafeList<DebugDrawVert> vertices = new(vertexBufferSize);
         private UnsafeList<uint> indices = new(indexBufferSize);
 
@@ -40,41 +40,41 @@ namespace Hexa.NET.DebugDraw
         /// <summary>
         /// Gets the total count of vertices used in the commands in the queue.
         /// </summary>
-        public uint VertexCount => nVerticesTotal;
+        public readonly uint VertexCount => nVerticesTotal;
 
         /// <summary>
         /// Gets the total count of indices used in the commands in the queue.
         /// </summary>
-        public uint IndexCount => nIndicesTotal;
+        public readonly uint IndexCount => nIndicesTotal;
 
         /// <summary>
         /// Gets the vertices of the debug draw command list.
         /// </summary>
-        public DebugDrawVert* Vertices => vertices.Data;
+        public readonly DebugDrawVert* Vertices => vertices.Data;
 
         /// <summary>
         /// Gets the indices of the debug draw command list.
         /// </summary>
-        public uint* Indices => indices.Data;
+        public readonly uint* Indices => indices.Data;
 
         /// <summary>
         /// Gets the list of debug draw commands.
         /// </summary>
-        public UnsafeList<DebugDrawCommand> Commands => queue;
+        public readonly UnsafeList<DebugDrawCommand> Commands => queue;
 
         /// <summary>
         /// Gets the type of the debug draw command list.
         /// </summary>
         public DebugDrawCommandListType Type { get; }
 
-        public void BeginDraw()
+        public readonly void BeginDraw()
         {
-            semaphore.Wait();
+            semaphore.Value.Wait();
         }
 
         public void BeginDraw(ShapeId id, nint texId, Matrix4x4 transform, Vector4 color)
         {
-            semaphore.Wait();
+            semaphore.Value.Wait();
             var key = (id, texId);
 
             if (map.TryGetValue(key, out var index))
@@ -130,9 +130,12 @@ namespace Hexa.NET.DebugDraw
         /// Adds a range of vertices to the debug draw command list.
         /// </summary>
         /// <param name="vertices">The array of vertices to add.</param>
-        public void AddVertexRange(DebugDrawVert[] vertices)
+        public void AddVertexRange(ReadOnlySpan<DebugDrawVert> vertices)
         {
-            this.vertices.AppendRange(vertices);
+            fixed (DebugDrawVert* verticesPtr = vertices)
+            {
+                this.vertices.AppendRange(verticesPtr, vertices.Length);
+            }
             nVerticesCmd += (uint)vertices.Length;
         }
 
@@ -140,9 +143,12 @@ namespace Hexa.NET.DebugDraw
         /// Adds a range of indices to the debug draw command list.
         /// </summary>
         /// <param name="indices">The array of indices to add.</param>
-        public void AddIndexRange(uint[] indices)
+        public void AddIndexRange(ReadOnlySpan<uint> indices)
         {
-            this.indices.AppendRange(indices);
+            fixed (uint* indicesPtr = indices)
+            {
+                this.indices.AppendRange(indicesPtr, indices.Length);
+            }
             nIndicesCmd += (uint)indices.Length;
         }
 
@@ -193,7 +199,7 @@ namespace Hexa.NET.DebugDraw
             nIndicesTotal += nIndicesCmd;
             nIndicesCmd = 0;
             nVerticesCmd = 0;
-            semaphore.Release();
+            semaphore.Value.Release();
         }
 
         /// <summary>
@@ -206,7 +212,7 @@ namespace Hexa.NET.DebugDraw
                 return;
             }
 
-            semaphore.Wait();
+            semaphore.Value.Wait();
 
             finished = true;
 
@@ -294,26 +300,21 @@ namespace Hexa.NET.DebugDraw
             nIndicesTotal = 0;
             nIndicesCmd = 0;
             finished = false;
-            semaphore.Release();
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!disposedValue)
-            {
-                semaphore.Dispose();
-                vertices.Release();
-                indices.Release();
-                queue.Release();
-                disposedValue = true;
-            }
+            semaphore.Value.Release();
         }
 
         public void Dispose()
         {
-            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-            Dispose(disposing: true);
-            GC.SuppressFinalize(this);
+            if (!disposedValue)
+            {
+                vertices.Release();
+                indices.Release();
+                queue.Release();
+                map.Release();
+                instanceData.Release();
+                semaphore.Dispose();
+                disposedValue = true;
+            }
         }
     }
 }

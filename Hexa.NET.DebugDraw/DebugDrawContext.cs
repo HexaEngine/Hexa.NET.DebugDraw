@@ -1,6 +1,6 @@
 ﻿namespace Hexa.NET.DebugDraw
 {
-    using System.Collections.Generic;
+    using Hexa.NET.Utilities;
     using System.Numerics;
 
     public struct DebugDrawStatistics
@@ -17,22 +17,26 @@
         }
     }
 
-    public class DebugDrawContext : IDisposable
+    public unsafe class DebugDrawContext : IDisposable
     {
-        private readonly List<DebugDrawCommandList> commandLists = new();
+        private readonly UnsafeList<DebugDrawCommandListPtr>* allocatedCommandLists;
         private readonly DebugDrawData drawData;
-        private readonly DebugDrawCommandList immediateList;
-        private DebugDrawCommandList currentCommandList;
+        private readonly DebugDrawCommandListPtr immediateList;
+        private DebugDrawCommandListPtr currentCommandList;
         private DebugDrawStatistics statistics;
 
         internal DebugDrawContext()
         {
-            immediateList = currentCommandList = new(DebugDrawCommandListType.Immediate);
-            commandLists.Add(currentCommandList);
-            drawData = new(commandLists);
+
+            immediateList = currentCommandList = Utils.AllocT<DebugDrawCommandList>();
+            *currentCommandList.Handle = new(DebugDrawCommandListType.Immediate);
+            allocatedCommandLists = Utils.AllocT<UnsafeList<DebugDrawCommandListPtr>>();
+            *allocatedCommandLists = [];
+            allocatedCommandLists->Add(currentCommandList);
+            drawData = new();
         }
 
-        public DebugDrawCommandList CurrentList => currentCommandList;
+        public DebugDrawCommandListPtr CurrentList => currentCommandList;
 
         public Matrix4x4 Camera => drawData.Camera;
 
@@ -70,12 +74,12 @@
             this.statistics = statistics;
         }
 
-        public void ExecuteCommandList(DebugDrawCommandList commandList)
+        public void ExecuteCommandList(DebugDrawCommandListPtr commandList)
         {
-            commandLists.Add(commandList);
+            drawData.CmdLists.Add(commandList);
         }
 
-        public void SetCurrent(DebugDrawCommandList? commandList)
+        public void SetCurrent(DebugDrawCommandListPtr commandList)
         {
             if (commandList == null)
             {
@@ -84,6 +88,28 @@
             else
             {
                 currentCommandList = commandList;
+            }
+        }
+
+        public DebugDrawCommandListPtr CreateCommandList(DebugDrawCommandListType type = DebugDrawCommandListType.Deferred)
+        {
+            var cmdList = Utils.AllocT<DebugDrawCommandList>();
+            *cmdList = new(type);
+            allocatedCommandLists->Add(cmdList);
+            return cmdList;
+        }
+
+        public void FreeCommandList(DebugDrawCommandListPtr commandList)
+        {
+            if (commandList == immediateList)
+            {
+                throw new InvalidOperationException("Cannot free the immediate command list");
+            }
+
+            if (allocatedCommandLists->Remove(commandList))
+            {
+                commandList.Dispose();
+                Utils.Free(commandList.Handle);
             }
         }
 
@@ -99,8 +125,14 @@
 
         internal void Destroy()
         {
-            immediateList.Dispose();
-            commandLists.Clear();
+            foreach (var cmdList in *allocatedCommandLists)
+            {
+                cmdList.Dispose();
+                Utils.Free(cmdList.Handle);
+            }
+            allocatedCommandLists->Release();
+            Utils.Free(allocatedCommandLists);
+            drawData.Dispose();
         }
 
         public void Dispose()
